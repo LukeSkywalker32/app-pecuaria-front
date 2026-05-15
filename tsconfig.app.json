@@ -18,6 +18,7 @@
     "jsx": "react-jsx",
     "strict": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
 
     /* Linting */
     "noUnusedLocals": true,
