@@ -1,45 +1,17 @@
-export interface LoginRequest {
-   farmId: string;
+export type UserRole = "admin" | "owner" | "farmmanager" | "veterinarian";
+
+export interface AuthUser {
+   id: string;
+   fullName: string;
    username: string;
-   password: string;
-}
-export interface RefreshTokenRequest {
-   refreshToken: string;
-}
-export interface ForgotPasswordRequest {
-   farmId: string;
    email: string;
-}
-export interface ConfirmResetRequest {
+   phone: string | null;
+   role: UserRole;
    farmId: string;
-   email: string;
-   code: string;
-   newPassword: string;
-}
-export interface AuthenticationResponse {
-   accessToken: string;
-   refreshToken: string;
-   userId: string;
-   username: string;
-   role: "admin" | "owner" | "farmmanager" | "veterinarian";
-   expiresIn: string;
+   farmName: string;
+   crmv: string | null;
+   active: boolean;
+   lastLogin: string | null;
 }
 
-export interface UserTokenData {
-   userId: string;
-   farmId: string;
-   username: string;
-   email: string;
-   role: "admin" | "owner" | "farmmanager" | "veterinarian";
-}
 
-export interface AuthContextType {
-   user: UserTokenData | null;
-   isAuthenticated: boolean;
-   isLoading: boolean;
-   login: (request: LoginRequest) => Promise<void>;
-   logout: () => void;
-   refreshToken: () => Promise<void>;
-   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
-   confirmReset: (request: ConfirmResetRequest) => Promise<void>;
-}

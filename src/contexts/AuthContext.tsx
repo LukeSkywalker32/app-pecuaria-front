@@ -1,141 +1,90 @@
-import type React from "react";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import authService from "../services/authService";
-import type {
-   AuthContextType,
-   ConfirmResetRequest,
-   ForgotPasswordRequest,
-   LoginRequest,
-   UserTokenData,
-} from "../types/auth.types";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "@/services/api";
+import type { AuthUser } from "@/types/auth.types";
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+//formato do contexto
+interface AuthContextData {
+   user: AuthUser | null;
+   isLoading: boolean;
+   isAuthenticated: boolean;
+   logout: () => void;
+   refreshUser: () => Promise<void>;
+}
 
-// Decodificar JWT para extrair dados do usuário
-const decodeToken = (token: string): UserTokenData | null => {
-   try {
-      const base64Url = token.split(".")[1];
-      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-      const jsonPayload = decodeURIComponent(
-         atob(base64)
-            .split("")
-            .map(c => `%${(`00${c.charCodeAt(0).toString(16)}`).slice(-2)}`)
-            .join(""),
-      );
-      return JSON.parse(jsonPayload);
-   } catch (error) {
-      return null;
-   }
-};
+// Cria contexto
+const AuthContext = createContext<AuthContextData>({
+   user: null,
+   isLoading: true,
+   isAuthenticated: false,
+   logout: () => {},
+   refreshUser: async () => {},
+});
+// ---------- Provider -------------
+export function AuthProvider({ children }: { children: ReactNode }) {
+   const navigate = useNavigate();
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-   const [user, setUser] = useState<UserTokenData | null>(null);
+   const [user, setUser] = useState<AuthUser | null>(null);
    const [isLoading, setIsLoading] = useState(true);
 
-   // Inicializar usuário a partir do localStorage
-   useEffect(() => {
+   // --- Busca dados do usuario logado ---
+   const fetchMe = useCallback(async () => {
       const token = localStorage.getItem("accessToken");
-      if (token) {
-         const userData = decodeToken(token);
-         if (userData) {
-            setUser(userData);
-         } else {
-            localStorage.removeItem("accessToken");
-            localStorage.removeItem("refreshToken");
-         }
+      if (!token) {
+         setIsLoading(false);
+         return;
       }
-      setIsLoading(false);
-   }, []);
-
-   const login = useCallback(async (request: LoginRequest) => {
-      setIsLoading(true);
       try {
-         const response = await authService.login(request);
-         const userData = decodeToken(response.accessToken);
-
-         if (userData) {
-            setUser(userData);
-            localStorage.setItem("accessToken", response.accessToken);
-            localStorage.setItem("refreshToken", response.refreshToken);
-         } else {
-            throw new Error("Erro ao processar token");
-         }
-      } catch (error) {
-         throw error;
+         const { data } = await api.get<AuthUser>("/users/me");
+         setUser(data);
+      } catch {
+         localStorage.clear();
+         setUser(null);
       } finally {
          setIsLoading(false);
       }
    }, []);
 
+   //--- Roda uma vez no mount para restaurar sessao existente
+   useEffect(() => {
+      fetchMe();
+   }, [fetchMe]);
+
+   // --- Logout ---
    const logout = useCallback(() => {
+      localStorage.clear(); // remove accessToken, refreshToken, role, farmId
       setUser(null);
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-   }, []);
+      navigate("/login");
+   }, [navigate]);
 
-   const refreshToken = useCallback(async () => {
+   // Usado após o usuário editar o próprio perfil
+   const refreshUser = useCallback(async () => {
       try {
-         const token = localStorage.getItem("refreshToken");
-         if (!token) {
-            logout();
-            return;
-         }
-
-         const response = await authService.refreshToken({ refreshToken: token });
-         const userData = decodeToken(response.accessToken);
-
-         if (userData) {
-            setUser(userData);
-            localStorage.setItem("accessToken", response.accessToken);
-            localStorage.setItem("refreshToken", response.refreshToken);
-         } else {
-            logout();
-         }
-      } catch (error) {
+         const { data } = await api.get<AuthUser>("/users/me");
+         setUser(data);
+      } catch {
          logout();
       }
    }, [logout]);
 
-   const forgotPassword = useCallback(async (request: ForgotPasswordRequest) => {
-      setIsLoading(true);
-      try {
-         await authService.forgotPassword(request);
-      } catch (error) {
-         throw error;
-      } finally {
-         setIsLoading(false);
-      }
-   }, []);
+   return (
+      <AuthContext.Provider
+         value={{
+            user,
+            isLoading,
+            isAuthenticated: !!user,
+            logout,
+            refreshUser,
+         }}
+      >
+         {children}
+      </AuthContext.Provider>
+   );
+}
 
-   const confirmReset = useCallback(async (request: ConfirmResetRequest) => {
-      setIsLoading(true);
-      try {
-         await authService.confirmReset(request);
-      } catch (error) {
-         throw error;
-      } finally {
-         setIsLoading(false);
-      }
-   }, []);
-
-   const value: AuthContextType = {
-      user,
-      isAuthenticated: !!user,
-      isLoading,
-      login,
-      logout,
-      refreshToken,
-      forgotPassword,
-      confirmReset,
-   };
-
-   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-export const useAuth = () => {
-   const context = useContext(AuthContext);
-   if (context === undefined) {
-      throw new Error("useAuth deve ser usado dentro de um AuthProvider");
-   }
-   return context;
-};
+// --- Hook de consumo ---
+export function useAuth() {
+   const ctx = useContext(AuthContext);
+   if (!ctx) throw new Error("useAuth deve ser usado dentro de <AuthProvider>");
+   return ctx;
+}
