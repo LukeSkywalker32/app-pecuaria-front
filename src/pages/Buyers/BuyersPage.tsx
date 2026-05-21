@@ -26,7 +26,7 @@ import {
    Tooltip,
    Typography,
 } from "@mui/material";
-import {useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { usePermission } from "@/hooks/usePermission";
@@ -116,7 +116,7 @@ function BuyerFormDialog({
          <Divider />
          <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <DialogContent sx={{ pt: 2 }}>
-               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 'fr", gap: 2 }}>
+               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                   <TextField
                      label="Nome / Razão Social"
                      size="small"
@@ -160,8 +160,15 @@ function BuyerFormDialog({
             </DialogContent>
             <Divider />
             <DialogActions sx={{ p: 2, gap: 1 }}>
-               <Button onClick={() => onClose(false)}>Cancelar</Button>
-               <Button type="submit" variant="contained" disabled={isSubmitting}>
+               <Button onClick={() => onClose(false)} sx={{ padding: "10px" }}>
+                  Cancelar
+               </Button>
+               <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={isSubmitting}
+                  sx={{ padding: "10px" }}
+               >
                   {buyer ? "Salvar Alterações" : "Cadastrar"}
                </Button>
             </DialogActions>
@@ -241,6 +248,7 @@ export default function BuyersPage() {
                      setEditing(null);
                      setFormOpen(true);
                   }}
+                  sx={{ padding: "16px" }}
                >
                   Novo Comprador
                </Button>

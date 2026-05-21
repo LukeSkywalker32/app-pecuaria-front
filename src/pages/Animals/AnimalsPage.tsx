@@ -223,13 +223,14 @@ export default function AnimalsPage() {
                   sx={{
                      borderColor: "divider",
                      color: "text.secondary",
+                     padding: "16px",
                   }}
                >
                   Filtros
                </Button>
                {/* Botão de novo animal — apenas para quem tem permissão */}
                {can("create_animal") && (
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate} sx={{ padding: "16px" }}>
                      Novo Animal
                   </Button>
                )}
