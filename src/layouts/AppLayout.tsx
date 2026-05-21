@@ -12,6 +12,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import PetsIcon from "@mui/icons-material/Pets";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import VaccinesIcon from "@mui/icons-material/Vaccines";
+
 import {
    AppBar,
    Avatar,
@@ -69,6 +70,12 @@ const NAV_ITEMS: NavItem[] = [
       path: "/farms",
       icon: <AgricultureIcon />,
       roles: ["admin"],
+   },
+   {
+      label: "Compradores",
+      path: "/buyers",
+      icon: <PeopleIcon />,
+      roles: ["admin", "owner"],
    },
 ];
 // --- COMPONENTES --
