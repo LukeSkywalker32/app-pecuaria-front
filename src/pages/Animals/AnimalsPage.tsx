@@ -5,6 +5,7 @@ import FilterListIcon from "@mui/icons-material/FilterList";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import PetsIcon from "@mui/icons-material/Pets";
 import SearchIcon from "@mui/icons-material/Search";
+import SellIcon from "@mui/icons-material/Sell";
 import {
    Alert,
    Box,
@@ -38,6 +39,7 @@ import { useNavigate } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
 import api from "@/services/api";
 import AnimalFormDialog from "./components/AnimalFormDialog";
+import SellAnimalDialog from "./components/SellAnimalDialog";
 
 // --- TIPOS VINDOS DA API ---
 export interface AnimalResponse {
@@ -126,6 +128,7 @@ export default function AnimalsPage() {
    const [editingAnimal, setEditingAnimal] = useState<AnimalResponse | null>(null);
    const [deleteTarget, setDeleteTarget] = useState<AnimalResponse | null>(null);
    const [deleteLoading, setDeleteLoading] = useState(false);
+   const [sellTarget, setSellTarget] = useState<AnimalResponse | null>(null);
 
    // ─── Fetch de animais ─────
    // Monta os query params a partir dos filtros ativos
@@ -544,6 +547,19 @@ export default function AnimalsPage() {
                                              </span>
                                           </Tooltip>
                                        )}
+
+                                       {/* Vender — apenas quem tem permissão e se animal está ativo */}
+                                       {can("edit_animal") && animal.status === "active" && (
+                                          <Tooltip title="Registrar venda">
+                                             <IconButton
+                                                size="small"
+                                                onClick={() => setSellTarget(animal)}
+                                                sx={{ color: "#F57F17" }}
+                                             >
+                                                <SellIcon fontSize="small" />
+                                             </IconButton>
+                                          </Tooltip>
+                                       )}
                                     </Box>
                                  </TableCell>
                               )}
@@ -592,6 +608,16 @@ export default function AnimalsPage() {
                </Button>
             </DialogActions>
          </Dialog>
+
+         {/* ── Dialog: Registrar Venda ── */}
+         <SellAnimalDialog
+            open={!!sellTarget}
+            animal={sellTarget}
+            onClose={sold => {
+               setSellTarget(null);
+               if (sold) fetchAnimals();
+            }}
+         />
       </Box>
    );
 }

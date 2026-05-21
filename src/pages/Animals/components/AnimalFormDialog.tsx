@@ -378,38 +378,39 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                )}
 
                {/* Status — só aparece no modo edição */}
-               {isEditing && (
-                  <Box sx={{ mt: 2 }}>
-                     <Typography
-                        variant="caption"
-                        sx={{
-                           fontWeight: 700,
-                           color: "text.secondary",
-                           textTransform: "uppercase",
-                           letterSpacing: 0.8,
-                        }}
-                     >
-                        Status
-                     </Typography>
-                     <Controller
-                        name="status"
-                        control={control}
-                        render={({ field }) => (
-                           <FormControl size="small" fullWidth sx={{ mt: 1 }}>
-                              <InputLabel>Status</InputLabel>
-                              <Select {...field} label="Status">
-                                 <MenuItem value="active">Ativo</MenuItem>
-                                 <MenuItem value="quarantine">Quarentena</MenuItem>
-                                 <MenuItem value="treatment">Tratamento</MenuItem>
-                              </Select>
-                              <FormHelperText>
-                                 Para registrar morte ou venda, use os módulos específicos.
-                              </FormHelperText>
-                           </FormControl>
-                        )}
-                     />
-                  </Box>
-               )}
+               <Box sx={{ mt: 2 }}>
+                  <Typography
+                     variant="caption"
+                     sx={{
+                        fontWeight: 700,
+                        color: "text.secondary",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.8,
+                     }}
+                  >
+                     Status
+                  </Typography>
+                  <Controller
+                     name="status"
+                     control={control}
+                     render={({ field }) => (
+                        <FormControl size="small" fullWidth sx={{ mt: 1 }}>
+                           <InputLabel>Status</InputLabel>
+                           <Select {...field} labelId="status">
+                              <MenuItem value="active">Ativo</MenuItem>
+                              <MenuItem value="quarantine">Quarentena</MenuItem>
+                              <MenuItem value="treatment">Tratamento</MenuItem>
+                              {/* Morto e vendido só via módulos específicos */}
+                           </Select>
+                           <FormHelperText>
+                              {isEditing
+                                 ? "Morto ou vendido: use os módulos Mortalidade / Venda"
+                                 : " A categoria (Vaca, Touro, Novilha...) é definida automaticamente pelo sistema com base na idade e sexo do animal"}
+                           </FormHelperText>
+                        </FormControl>
+                     )}
+                  />
+               </Box>
             </DialogContent>
 
             <Divider />
