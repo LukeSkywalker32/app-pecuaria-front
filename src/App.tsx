@@ -24,6 +24,7 @@ const ManagementPage = lazy(() => import("@/pages/Management/ManagementPage"));
 const UsersPage = lazy(() => import("@/pages/Users/UsersPage"));
 const FarmsPage = lazy(() => import("@/pages/Farms/FarmsPage"));
 const ProfilePage = lazy(() => import("@/pages/Profile/ProfilePage"));
+const ForgotPassWordPage = lazy(() => import("@/pages/ForgotPassword/ForgotPasswordPage"));
 
 // ─── Spinner exibido enquanto o chunk da página carrega ───────────────────
 function PageLoader() {
@@ -51,6 +52,7 @@ export default function App() {
             <Routes>
                {/* ── Rotas públicas ─────────────────────────────────── */}
                <Route path="/login" element={<LoginPage />} />
+               <Route path="/forgot-password" element={<ForgotPassWordPage />} />
 
                {/* Redireciona raiz para dashboard — ProtectedRoute resolve se está logado */}
                <Route path="/" element={<Navigate to="/dashboard" replace />} />

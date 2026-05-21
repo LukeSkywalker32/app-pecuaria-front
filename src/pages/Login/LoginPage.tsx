@@ -13,7 +13,6 @@ import {
    IconButton,
    InputAdornment,
    InputLabel,
-   Link,
    MenuItem,
    Paper,
    Select,
@@ -22,7 +21,7 @@ import {
    Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import api from "@/services/api";
 
 // ─── Tipo da fazenda pública ───────────────────────────────────────────────
@@ -383,13 +382,17 @@ export default function LoginPage() {
                      />
 
                      <Box sx={{ textAlign: "right", mb: 2.5 }}>
-                        <Link
-                           href="/forgot-password"
-                           underline="hover"
-                           sx={{ fontSize: 12, color: "primary.main", fontWeight: 600 }}
+                        <RouterLink
+                           to="/forgot-password"
+                           style={{
+                              fontSize: 14,
+                              color: "#1B4332",
+                              fontWeight: 600,
+                              textDecoration: "none",
+                           }}
                         >
                            Esqueceu a senha?
-                        </Link>
+                        </RouterLink>
                      </Box>
 
                      {/* Erro de login */}
