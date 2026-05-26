@@ -52,7 +52,7 @@ export interface AnimalResponse {
    birthDate: string;
    ageInMonths: number;
    category: string;
-   uaValue: number;
+   weightKg: number | null;
    status: "active" | "dead" | "sold" | "quarentine" | "treatment";
    pastureId: string | null;
    pastureName: string | null;
@@ -73,7 +73,7 @@ function statusColor(
       active: "success",
       dead: "error",
       sold: "default",
-      quaretine: "warning",
+      quarantine: "warning",
       treatment: "info",
    };
    return map[status] ?? "default";
@@ -85,7 +85,7 @@ function statusLabel(status: AnimalResponse["status"]) {
       active: "Ativo",
       dead: "Morto",
       sold: "Vendido",
-      quaretine: "Quarentena",
+      quarantine: "Quarentena",
       treatment: "Tratamento",
    };
    return map[status] ?? status;
@@ -104,6 +104,11 @@ function formatAge(months: number): string {
    const years = Math.floor(months / 12);
    const rem = months % 12;
    return rem > 0 ? `${years}a ${rem}m` : `${years}anos`;
+}
+// Formata peso: "420 kg"ou "-"quando null
+function formatWeight(kg: number | null): string {
+   if (kg === null || kg === undefined) return "-";
+   return `${kg} kg`;
 }
 
 // --- Componente Principal ---
@@ -230,7 +235,12 @@ export default function AnimalsPage() {
                </Button>
                {/* Botão de novo animal — apenas para quem tem permissão */}
                {can("create_animal") && (
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate} sx={{ padding: "16px" }}>
+                  <Button
+                     variant="contained"
+                     startIcon={<AddIcon />}
+                     onClick={handleOpenCreate}
+                     sx={{ padding: "16px" }}
+                  >
                      Novo Animal
                   </Button>
                )}
@@ -271,7 +281,7 @@ export default function AnimalsPage() {
                      >
                         <MenuItem value="">Todos</MenuItem>
                         <MenuItem value="active">Ativo</MenuItem>
-                        <MenuItem value="quarentine">Quarentena</MenuItem>
+                        <MenuItem value="quarantine">Quarentena</MenuItem>
                         <MenuItem value="sold">Vendido</MenuItem>
                         <MenuItem value="dead">Morto</MenuItem>
                         <MenuItem value="treatment">Tratamento</MenuItem>
@@ -371,6 +381,11 @@ export default function AnimalsPage() {
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
                            >
+                              PESO
+                           </TableCell>
+                           <TableCell
+                              sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
+                           >
                               IDADE
                            </TableCell>
                            <TableCell
@@ -447,13 +462,13 @@ export default function AnimalsPage() {
                                        height: 22,
                                     }}
                                  />
-                                 {/* UA value — métrica técnica */}
+                                 {/* Peso — métrica técnica */}
                                  <Typography
                                     variant="caption"
                                     color="text.secondary"
                                     sx={{ display: "block" }}
                                  >
-                                    {animal.uaValue} UA
+                                    {animal.weightKg} Kg
                                  </Typography>
                               </TableCell>
 

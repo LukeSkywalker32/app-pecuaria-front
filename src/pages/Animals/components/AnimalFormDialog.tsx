@@ -416,7 +416,11 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
             <Divider />
 
             <DialogActions sx={{ p: 2, gap: 1 }}>
-               <Button onClick={() => onClose(false)} disabled={isSubmitting} sx={{ padding: "10px" }}>
+               <Button
+                  onClick={() => onClose(false)}
+                  disabled={isSubmitting}
+                  sx={{ padding: "10px" }}
+               >
                   Cancelar
                </Button>
                <Button

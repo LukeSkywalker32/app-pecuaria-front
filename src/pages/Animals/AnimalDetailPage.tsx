@@ -179,7 +179,10 @@ export default function AnimalDetailPage() {
                            ? `${animal.ageInMonths} meses`
                            : `${Math.floor(animal.ageInMonths / 12)} anos`,
                   },
-                  { label: "Unidade Animal", value: `${animal.uaValue} UA` },
+                  {
+                     label: "Peso",
+                     value: animal.weightKg !== null ? `${animal.weightKg} Kg` : "Não Informado",
+                  },
                   { label: "Pasto Atual", value: animal.pastureName ?? "Sem pasto" },
                   {
                      label: "Origem",
