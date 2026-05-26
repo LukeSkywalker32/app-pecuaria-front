@@ -52,8 +52,9 @@ export interface AnimalResponse {
    birthDate: string;
    ageInMonths: number;
    category: string;
+   // Peso em kg — null quando não informado
    weightKg: number | null;
-   status: "active" | "dead" | "sold" | "quarentine" | "treatment";
+   status: "active" | "dead" | "sold" | "quarantine" | "treatment";
    pastureId: string | null;
    pastureName: string | null;
    sireId: string | null;
@@ -65,7 +66,6 @@ export interface AnimalResponse {
 }
 
 // ---- Mapeamentos visuais ----
-//Cor do chip de status
 function statusColor(
    status: AnimalResponse["status"],
 ): "success" | "error" | "warning" | "default" | "info" {
@@ -79,7 +79,6 @@ function statusColor(
    return map[status] ?? "default";
 }
 
-// Label amigavel por status
 function statusLabel(status: AnimalResponse["status"]) {
    const map: Record<string, string> = {
       active: "Ativo",
@@ -91,23 +90,23 @@ function statusLabel(status: AnimalResponse["status"]) {
    return map[status] ?? status;
 }
 
-//Cor do chip de categoria (baseada no chip do animal)
 function categoryColor(cat: string): string {
    if (cat === "Touro") return "#1B4332";
    if (cat === "Vaca") return "#2D6A4F";
    if (cat === "Garrote" || cat === "Novilha") return "#52B788";
-   return "#95D5B2"; //Bezerros
+   return "#95D5B2";
 }
-// Formata idade legível: "2 anos e 3 meses" ou "8 meses"
+
 function formatAge(months: number): string {
    if (months < 12) return `${months} meses`;
    const years = Math.floor(months / 12);
    const rem = months % 12;
    return rem > 0 ? `${years}a ${rem}m` : `${years}anos`;
 }
-// Formata peso: "420 kg"ou "-"quando null
+
+// Formata peso: "420 kg" ou "—" quando null
 function formatWeight(kg: number | null): string {
-   if (kg === null || kg === undefined) return "-";
+   if (kg === null || kg === undefined) return "—";
    return `${kg} kg`;
 }
 
@@ -116,27 +115,21 @@ export default function AnimalsPage() {
    const navigate = useNavigate();
    const { can } = usePermission();
 
-   // ── Estado: dados e loading ────
    const [animals, setAnimals] = useState<AnimalResponse[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState("");
 
-   // --- Estado: filtros
-   // Os filtros sao passados como query params para api
    const [search, setSearch] = useState("");
-   const [statusFilter, setStatusFilter] = useState(""); //""=todos
-   const [genderFilter, setGenderFilter] = useState(""); //""=todos
+   const [statusFilter, setStatusFilter] = useState("");
+   const [genderFilter, setGenderFilter] = useState("");
    const [showFilters, setShowFilters] = useState(false);
 
-   // ── Estado: dialogs ────────
    const [formOpen, setFormOpen] = useState(false);
    const [editingAnimal, setEditingAnimal] = useState<AnimalResponse | null>(null);
    const [deleteTarget, setDeleteTarget] = useState<AnimalResponse | null>(null);
    const [deleteLoading, setDeleteLoading] = useState(false);
    const [sellTarget, setSellTarget] = useState<AnimalResponse | null>(null);
 
-   // ─── Fetch de animais ─────
-   // Monta os query params a partir dos filtros ativos
    const fetchAnimals = useCallback(async () => {
       setLoading(true);
       setError("");
@@ -149,7 +142,7 @@ export default function AnimalsPage() {
          const { data } = await api.get<AnimalResponse[]>(`/animals?${params.toString()}`);
          setAnimals(data);
       } catch {
-         setError("Não foi possivel carregar os animais. Tente novamente.");
+         setError("Não foi possível carregar os animais. Tente novamente.");
       } finally {
          setLoading(false);
       }
@@ -161,23 +154,21 @@ export default function AnimalsPage() {
             fetchAnimals();
          },
          search ? 400 : 0,
-      ); // sem delay se não há busca (status/gender mudam instante)
+      );
       return () => clearTimeout(timer);
    }, [fetchAnimals, search]);
 
-   // ---- Handlers ---
-
    function handleOpenCreate() {
-      setEditingAnimal(null); //null = modo criação
+      setEditingAnimal(null);
       setFormOpen(true);
    }
    function handleOpenEdit(animal: AnimalResponse) {
-      setEditingAnimal(animal); // com dados = modo edição
+      setEditingAnimal(animal);
       setFormOpen(true);
    }
    function handleFormClose(saved: boolean) {
       setFormOpen(false);
-      if (saved) fetchAnimals(); // re-busca se houve alteração
+      if (saved) fetchAnimals();
    }
 
    async function handleDelete() {
@@ -188,15 +179,15 @@ export default function AnimalsPage() {
          setDeleteTarget(null);
          fetchAnimals();
       } catch {
-         setError("Erro ao excluir animal. Verifique se ele não possui registros vinculados");
+         setError("Erro ao excluir animal. Verifique se ele não possui registros vinculados.");
       } finally {
          setDeleteLoading(false);
       }
    }
-   // -------------- Render ----------------
+
    return (
       <Box sx={{ p: 3, maxWidth: "1200px" }}>
-         {/* ----Cabeçalho ----- */}
+         {/* ── Cabeçalho ── */}
          <Box
             sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}
          >
@@ -205,11 +196,7 @@ export default function AnimalsPage() {
                <Box>
                   <Typography
                      variant="h5"
-                     sx={{
-                        fontWeight: 700,
-                        color: "text.primary",
-                        lineHeight: 1.2,
-                     }}
+                     sx={{ fontWeight: 700, color: "text.primary", lineHeight: 1.2 }}
                   >
                      Animais
                   </Typography>
@@ -220,20 +207,14 @@ export default function AnimalsPage() {
             </Box>
 
             <Box sx={{ display: "flex", gap: 1 }}>
-               {/* Botão de filtros — visível sempre */}
                <Button
                   variant="outlined"
                   startIcon={<FilterListIcon />}
                   onClick={() => setShowFilters(v => !v)}
-                  sx={{
-                     borderColor: "divider",
-                     color: "text.secondary",
-                     padding: "16px",
-                  }}
+                  sx={{ borderColor: "divider", color: "text.secondary", padding: "16px" }}
                >
                   Filtros
                </Button>
-               {/* Botão de novo animal — apenas para quem tem permissão */}
                {can("create_animal") && (
                   <Button
                      variant="contained"
@@ -246,12 +227,12 @@ export default function AnimalsPage() {
                )}
             </Box>
          </Box>
-         {/* ── Barra de filtros ── */}
+
+         {/* ── Filtros ── */}
          <Paper
             elevation={0}
             sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 2, mb: 2 }}
          >
-            {/* ── Barra de filtros ── */}
             <TextField
                fullWidth
                size="small"
@@ -269,7 +250,6 @@ export default function AnimalsPage() {
                }}
                sx={{ mb: showFilters ? 2 : 0 }}
             />
-            {/* Filtros avançados — colapsáveis */}
             {showFilters && (
                <Box sx={{ display: "flex", gap: 2 }}>
                   <FormControl size="small" sx={{ minWidth: 160 }}>
@@ -300,7 +280,7 @@ export default function AnimalsPage() {
                         <MenuItem value="M">Macho</MenuItem>
                      </Select>
                   </FormControl>
-                  {/* Limpar filtros */}
+
                   {(statusFilter || genderFilter) && (
                      <Button
                         size="small"
@@ -316,7 +296,8 @@ export default function AnimalsPage() {
                </Box>
             )}
          </Paper>
-         {/* ── Feedback de erro ── */}
+
+         {/* ── Erro ── */}
          {error && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
                {error}
@@ -334,12 +315,10 @@ export default function AnimalsPage() {
             }}
          >
             {loading ? (
-               // Estado de carregamento — spinner centralizado
                <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
                   <CircularProgress color="primary" />
                </Box>
             ) : animals.length === 0 ? (
-               // Estado vazio — mensagem amigável
                <Box sx={{ textAlign: "center", py: 8, color: "text.secondary" }}>
                   <PetsIcon sx={{ fontSize: 48, mb: 1, opacity: 0.3 }} />
                   <Typography variant="body1" sx={{ fontWeight: 600 }}>
@@ -381,12 +360,13 @@ export default function AnimalsPage() {
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
                            >
-                              PESO
+                              IDADE
                            </TableCell>
+                           {/* PESO substituiu UA */}
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
                            >
-                              IDADE
+                              PESO
                            </TableCell>
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
@@ -398,7 +378,6 @@ export default function AnimalsPage() {
                            >
                               PASTO
                            </TableCell>
-                           {/* Coluna de ações só aparece se o usuário pode fazer algo */}
                            {(can("edit_animal") || can("delete_animal")) && (
                               <TableCell
                                  sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
@@ -415,14 +394,9 @@ export default function AnimalsPage() {
                            <TableRow
                               key={animal.id}
                               hover
-                              // Clicar na linha navega para o detalhe do animal
                               onClick={() => navigate(`/animals/${animal.id}`)}
-                              sx={{
-                                 cursor: "pointer",
-                                 "&:last-child td": { border: 0 },
-                              }}
+                              sx={{ cursor: "pointer", "&:last-child td": { border: 0 } }}
                            >
-                              {/* Brinco + chip — empilhados */}
                               <TableCell>
                                  <Typography
                                     variant="body2"
@@ -435,21 +409,18 @@ export default function AnimalsPage() {
                                  </Typography>
                               </TableCell>
 
-                              {/* Nome do animal */}
                               <TableCell>
                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                     {animal.name}
                                  </Typography>
                               </TableCell>
 
-                              {/* Raça */}
                               <TableCell>
                                  <Typography variant="body2" color="text.secondary">
                                     {animal.breed}
                                  </Typography>
                               </TableCell>
 
-                              {/* Categoria com chip colorido */}
                               <TableCell>
                                  <Chip
                                     label={animal.category}
@@ -462,24 +433,25 @@ export default function AnimalsPage() {
                                        height: 22,
                                     }}
                                  />
-                                 {/* Peso — métrica técnica */}
-                                 <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    sx={{ display: "block" }}
-                                 >
-                                    {animal.weightKg} Kg
-                                 </Typography>
                               </TableCell>
 
-                              {/* Idade formatada */}
                               <TableCell>
                                  <Typography variant="body2">
                                     {formatAge(animal.ageInMonths)}
                                  </Typography>
                               </TableCell>
 
-                              {/* Status com chip MUI colorido */}
+                              {/* Coluna PESO */}
+                              <TableCell>
+                                 <Typography
+                                    variant="body2"
+                                    sx={{ fontWeight: animal.weightKg ? 600 : 400 }}
+                                    color={animal.weightKg ? "text.primary" : "text.disabled"}
+                                 >
+                                    {formatWeight(animal.weightKg)}
+                                 </Typography>
+                              </TableCell>
+
                               <TableCell>
                                  <Chip
                                     label={statusLabel(animal.status)}
@@ -489,7 +461,6 @@ export default function AnimalsPage() {
                                  />
                               </TableCell>
 
-                              {/* Pasto atual ou "Sem pasto" */}
                               <TableCell>
                                  <Typography
                                     variant="body2"
@@ -499,7 +470,6 @@ export default function AnimalsPage() {
                                  </Typography>
                               </TableCell>
 
-                              {/* Botões de ação — param propagação do click para não navegar */}
                               {(can("edit_animal") || can("delete_animal")) && (
                                  <TableCell align="right" onClick={e => e.stopPropagation()}>
                                     <Box
@@ -509,7 +479,6 @@ export default function AnimalsPage() {
                                           justifyContent: "flex-end",
                                        }}
                                     >
-                                       {/* Botão Detalhes — visível para todos */}
                                        <Tooltip title="Ver detalhes">
                                           <IconButton
                                              size="small"
@@ -520,14 +489,12 @@ export default function AnimalsPage() {
                                           </IconButton>
                                        </Tooltip>
 
-                                       {/* Editar — apenas quem tem permissão */}
                                        {can("edit_animal") && (
                                           <Tooltip title="Editar animal">
                                              <IconButton
                                                 size="small"
                                                 onClick={() => handleOpenEdit(animal)}
                                                 sx={{ color: "primary.main" }}
-                                                // Impede excluir animais mortos/vendidos
                                                 disabled={
                                                    animal.status === "dead" ||
                                                    animal.status === "sold"
@@ -538,7 +505,6 @@ export default function AnimalsPage() {
                                           </Tooltip>
                                        )}
 
-                                       {/* Deletar — apenas quem tem permissão */}
                                        {can("delete_animal") && (
                                           <Tooltip
                                              title={
@@ -547,7 +513,6 @@ export default function AnimalsPage() {
                                                    : "Excluir animal"
                                              }
                                           >
-                                             {/* Span necessário para o Tooltip funcionar em botão desabilitado */}
                                              <span>
                                                 <IconButton
                                                    size="small"
@@ -564,7 +529,6 @@ export default function AnimalsPage() {
                                           </Tooltip>
                                        )}
 
-                                       {/* Vender — apenas quem tem permissão e se animal está ativo */}
                                        {can("edit_animal") && animal.status === "active" && (
                                           <Tooltip title="Registrar venda">
                                              <IconButton
@@ -587,10 +551,8 @@ export default function AnimalsPage() {
             )}
          </Paper>
 
-         {/* ── Dialog: Criar / Editar Animal ── */}
          <AnimalFormDialog open={formOpen} animal={editingAnimal} onClose={handleFormClose} />
 
-         {/* ── Dialog: Confirmar exclusão ── */}
          <Dialog
             open={!!deleteTarget}
             onClose={() => setDeleteTarget(null)}
@@ -625,7 +587,6 @@ export default function AnimalsPage() {
             </DialogActions>
          </Dialog>
 
-         {/* ── Dialog: Registrar Venda ── */}
          <SellAnimalDialog
             open={!!sellTarget}
             animal={sellTarget}

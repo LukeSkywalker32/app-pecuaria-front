@@ -11,6 +11,7 @@ import {
    Divider,
    FormControl,
    FormHelperText,
+   InputAdornment,
    InputLabel,
    MenuItem,
    Select,
@@ -34,7 +35,6 @@ interface Pasture {
 }
 
 // ─── Schema de validação com Zod ─────────────────────────────────────────
-// Espelha as regras do backend — evita roundtrip desnecessário
 const schema = z.object({
    chipId: z
       .string()
@@ -51,11 +51,19 @@ const schema = z.object({
       .string()
       .min(2, "Raça deve ter pelo menos 2 caracteres")
       .max(50, "Raça deve ter no máximo 50 caracteres"),
-   gender: z.enum(["M", "F"], "Sexo é obrigatório"),
+   gender: z.enum(["M", "F"], { message: "Sexo é obrigatório" }),
    birthDate: z.string().min(1, "Data de nascimento é obrigatória"),
    origin: z.enum(["born", "purchased"]),
    pastureId: z.string().optional().or(z.literal("")),
    status: z.enum(["active", "quarantine", "treatment", "dead", "sold"]).optional(),
+   // Peso: número positivo até 9999 ou vazio
+   weightKg: z
+      .string()
+      .optional()
+      .refine(
+         val => !val || (!Number.isNaN(Number(val)) && Number(val) > 0 && Number(val) <= 9999),
+         { message: "Informe um peso válido entre 1 e 9999 kg" },
+      ),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -69,23 +77,21 @@ interface Props {
 
 // ─── Componente ───────────────────────────────────────────────────────────
 export default function AnimalFormDialog({ open, animal, onClose }: Props) {
-   const isEditing = !!animal; // true quando veio com dados = modo edição
+   const isEditing = !!animal;
 
    const [pastures, setPastures] = useState<Pasture[]>([]);
    const [pasturesLoading, setPasturesLoading] = useState(false);
    const [submitError, setSubmitError] = useState("");
 
-   // ── React Hook Form com validação Zod ─────────────────────────────────
    const {
-      control, // conecta campos controlados (Select, etc.)
-      register, // conecta campos de input simples
-      handleSubmit, // envolve o submit com validação
-      watch, // observa valores de outros campos em tempo real
-      reset, // reseta o formulário
+      control,
+      register,
+      handleSubmit,
+      watch,
+      reset,
       formState: { errors, isSubmitting },
    } = useForm<FormData>({
       resolver: zodResolver(schema),
-      // Preenche com dados do animal ao editar, ou defaults ao criar
       defaultValues: {
          chipId: "",
          currentEarTag: "",
@@ -96,13 +102,13 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
          origin: "born",
          pastureId: "",
          status: "active",
+         weightKg: "",
       },
    });
 
-   // Observa o campo origin para mostrar/esconder a mensagem de quarentena
    const originValue = watch("origin");
 
-   // ── Carrega pastos disponíveis para o select ──────────────────────────
+   // ── Carrega pastos disponíveis ────────────────────────────────────────
    useEffect(() => {
       if (!open) return;
       setPasturesLoading(true);
@@ -112,10 +118,9 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
          .finally(() => setPasturesLoading(false));
    }, [open]);
 
-   // ── Popula o formulário ao abrir no modo edição ───────────────────────
+   // ── Preenche formulário no modo edição ───────────────────────────────
    useEffect(() => {
       if (open && animal) {
-         // Converte a data ISO para o formato YYYY-MM-DD que o input type=date espera
          const birthDateFormatted = animal.birthDate
             ? new Date(animal.birthDate).toISOString().split("T")[0]
             : "";
@@ -132,9 +137,10 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
             status: (["active", "quarantine", "treatment", "dead", "sold"].includes(animal.status)
                ? animal.status
                : "active") as "active" | "quarantine" | "treatment" | "dead" | "sold",
+            // Converte número para string para o input controlado
+            weightKg: animal.weightKg != null ? String(animal.weightKg) : "",
          });
       } else if (open && !animal) {
-         // Limpa o formulário ao abrir para criação
          reset({
             chipId: "",
             currentEarTag: "",
@@ -145,6 +151,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
             origin: "born",
             pastureId: "",
             status: "active",
+            weightKg: "",
          });
       }
       setSubmitError("");
@@ -154,24 +161,25 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
    async function onSubmit(data: FormData) {
       setSubmitError("");
       try {
-         // Limpa campos vazios opcionais antes de enviar
+         // Converte weightKg de string para número (ou undefined se vazio)
+         const weightKg =
+            data.weightKg && data.weightKg.trim() !== "" ? Number(data.weightKg) : undefined;
+
          const payload = {
             ...data,
             currentEarTag: data.currentEarTag || undefined,
             pastureId: data.pastureId || undefined,
+            weightKg,
          };
 
          if (isEditing) {
-            // PUT — atualiza o animal existente
-            // chipId não é editável (não enviamos no update)
             const { chipId, origin, ...updatePayload } = payload;
             await api.put(`/animals/${animal!.id}`, updatePayload);
          } else {
-            // POST — cria novo animal
             await api.post("/animals", payload);
          }
 
-         onClose(true); // fecha e sinaliza que houve alteração
+         onClose(true);
       } catch (err: any) {
          const msg = err?.response?.data?.error ?? "Erro ao salvar animal. Tente novamente.";
          setSubmitError(msg);
@@ -187,10 +195,8 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
 
          <Divider />
 
-         {/* noValidate desativa a validação nativa do browser — o Zod assume */}
          <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <DialogContent sx={{ pt: 2 }}>
-               {/* Erro geral do servidor */}
                {submitError && (
                   <Alert severity="error" sx={{ mb: 2 }}>
                      {submitError}
@@ -211,11 +217,10 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                </Typography>
 
                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 1, mb: 2 }}>
-                  {/* Chip ID — não editável após criação */}
                   <TextField
                      label="Chip ID *"
                      size="small"
-                     disabled={isEditing} // chip não pode ser alterado depois
+                     disabled={isEditing}
                      error={!!errors.chipId}
                      helperText={
                         errors.chipId?.message ?? (isEditing ? "Não editável" : "Ex: CHIP-T001")
@@ -223,7 +228,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      {...register("chipId")}
                   />
 
-                  {/* Brinco (earTag) — opcional */}
                   <TextField
                      label="Brinco"
                      size="small"
@@ -247,7 +251,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                </Typography>
 
                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 1, mb: 2 }}>
-                  {/* Nome */}
                   <TextField
                      label="Nome *"
                      size="small"
@@ -256,7 +259,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      {...register("name")}
                   />
 
-                  {/* Raça */}
                   <TextField
                      label="Raça *"
                      size="small"
@@ -265,7 +267,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      {...register("breed")}
                   />
 
-                  {/* Sexo */}
                   <Controller
                      name="gender"
                      control={control}
@@ -283,20 +284,33 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      )}
                   />
 
-                  {/* Data de nascimento — type=date renderiza o date picker nativo */}
                   <TextField
                      label="Data de Nascimento *"
                      size="small"
                      type="date"
                      slotProps={{
                         inputLabel: { shrink: true },
-                        htmlInput: {
-                           max: new Date().toISOString().split("T")[0],
-                        },
+                        htmlInput: { max: new Date().toISOString().split("T")[0] },
                      }}
                      error={!!errors.birthDate}
                      helperText={errors.birthDate?.message}
                      {...register("birthDate")}
+                  />
+
+                  {/* ── Peso — ocupa coluna inteira no grid ── */}
+                  <TextField
+                     label="Peso"
+                     size="small"
+                     type="number"
+                     slotProps={{
+                        input: {
+                           endAdornment: <InputAdornment position="end">kg</InputAdornment>,
+                        },
+                        htmlInput: { min: 1, max: 9999, step: 0.1 },
+                     }}
+                     error={!!errors.weightKg}
+                     helperText={errors.weightKg?.message ?? "Opcional — atualize após pesagem"}
+                     {...register("weightKg")}
                   />
                </Box>
 
@@ -314,7 +328,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                </Typography>
 
                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 1, mb: 1 }}>
-                  {/* Origem — born ou purchased (não editável) */}
                   <Controller
                      name="origin"
                      control={control}
@@ -330,7 +343,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      )}
                   />
 
-                  {/* Pasto — obrigatório para born, opcional para purchased */}
                   <Controller
                      name="pastureId"
                      control={control}
@@ -369,7 +381,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                   />
                </Box>
 
-               {/* Dica visual: comprado sem pasto entra em quarentena automaticamente */}
                {originValue === "purchased" && (
                   <Alert severity="info" sx={{ mt: 1 }}>
                      Animais comprados sem pasto são automaticamente registrados com status{" "}
@@ -377,7 +388,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                   </Alert>
                )}
 
-               {/* Status — só aparece no modo edição */}
+               {/* ── Seção: Status (apenas edição) ── */}
                <Box sx={{ mt: 2 }}>
                   <Typography
                      variant="caption"
@@ -400,12 +411,11 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                               <MenuItem value="active">Ativo</MenuItem>
                               <MenuItem value="quarantine">Quarentena</MenuItem>
                               <MenuItem value="treatment">Tratamento</MenuItem>
-                              {/* Morto e vendido só via módulos específicos */}
                            </Select>
                            <FormHelperText>
                               {isEditing
                                  ? "Morto ou vendido: use os módulos Mortalidade / Venda"
-                                 : " A categoria (Vaca, Touro, Novilha...) é definida automaticamente pelo sistema com base na idade e sexo do animal"}
+                                 : "A categoria (Vaca, Touro, Novilha...) é definida automaticamente pela idade e sexo"}
                            </FormHelperText>
                         </FormControl>
                      )}

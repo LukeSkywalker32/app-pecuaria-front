@@ -17,7 +17,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "@/services/api";
 import type { AnimalResponse } from "./AnimalsPage";
 
-// ─── Formatações reutilizadas ────────────────────────────────────────────
 function statusLabel(s: string) {
    return (
       {
@@ -45,7 +44,6 @@ function formatDate(iso: string | null | undefined) {
    return new Date(iso).toLocaleDateString("pt-BR");
 }
 
-// ─── Painel de tab com lazy render ───────────────────────────────────────
 function TabPanel({
    children,
    value,
@@ -55,12 +53,10 @@ function TabPanel({
    value: number;
    index: number;
 }) {
-   // Só renderiza o conteúdo quando a tab está ativa — melhora performance
    if (value !== index) return null;
    return <Box sx={{ pt: 2 }}>{children}</Box>;
 }
 
-// ─── Componente ───────────────────────────────────────────────────────────
 export default function AnimalDetailPage() {
    const { id } = useParams<{ id: string }>();
    const navigate = useNavigate();
@@ -70,7 +66,6 @@ export default function AnimalDetailPage() {
    const [error, setError] = useState("");
    const [tab, setTab] = useState(0);
 
-   // Carrega dados do animal pelo ID da URL
    useEffect(() => {
       if (!id) return;
       setLoading(true);
@@ -105,7 +100,6 @@ export default function AnimalDetailPage() {
 
    return (
       <Box sx={{ p: 3, maxWidth: 900 }}>
-         {/* ── Breadcrumb / Voltar ── */}
          <Button
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate("/animals")}
@@ -114,13 +108,11 @@ export default function AnimalDetailPage() {
             Animais
          </Button>
 
-         {/* ── Header do animal ── */}
          <Paper
             elevation={0}
             sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 3, mb: 2 }}
          >
             <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
-               {/* Ícone de avatar do animal */}
                <Box
                   sx={{
                      width: 56,
@@ -162,7 +154,6 @@ export default function AnimalDetailPage() {
 
             <Divider sx={{ my: 2 }} />
 
-            {/* ── Grid de informações básicas ── */}
             <Box
                sx={{
                   display: "grid",
@@ -171,7 +162,7 @@ export default function AnimalDetailPage() {
                }}
             >
                {[
-                  { label: "Data de Nascimento", value: formatDate(animal.birthDate) },
+                  { label: "Data de Nascimento", value: formatDate(animal.birthDate as any) },
                   {
                      label: "Idade",
                      value:
@@ -179,16 +170,17 @@ export default function AnimalDetailPage() {
                            ? `${animal.ageInMonths} meses`
                            : `${Math.floor(animal.ageInMonths / 12)} anos`,
                   },
+                  // Peso substituiu Unidade Animal
                   {
                      label: "Peso",
-                     value: animal.weightKg !== null ? `${animal.weightKg} Kg` : "Não Informado",
+                     value: animal.weightKg != null ? `${animal.weightKg} kg` : "Não informado",
                   },
                   { label: "Pasto Atual", value: animal.pastureName ?? "Sem pasto" },
                   {
                      label: "Origem",
                      value: (animal as any).origin === "born" ? "Nascido na fazenda" : "Comprado",
                   },
-                  { label: "Cadastrado em", value: formatDate(animal.createdAt) },
+                  { label: "Cadastrado em", value: formatDate(animal.createdAt as any) },
                ].map(item => (
                   <Box key={item.label}>
                      <Typography
@@ -211,7 +203,6 @@ export default function AnimalDetailPage() {
             </Box>
          </Paper>
 
-         {/* ── Tabs de módulos relacionados ── */}
          <Paper
             elevation={0}
             sx={{
@@ -240,7 +231,6 @@ export default function AnimalDetailPage() {
             </Tabs>
 
             <Box sx={{ p: 2 }}>
-               {/* Placeholder de cada tab — implementar progressivamente */}
                {[0, 1, 2, 3, 4, 5, 6].map(i => (
                   <TabPanel key={i} value={tab} index={i}>
                      <Typography
