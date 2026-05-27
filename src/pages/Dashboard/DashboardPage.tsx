@@ -23,7 +23,7 @@ import {
    Tooltip,
    Typography,
 } from "@mui/material";
-import { useEffect, useSate } from "react";
+import { useEffect, useSate, useState } from "react";
 import {
    Bar,
    BarChart,
@@ -37,6 +37,7 @@ import {
    XAxis,
    YAxis,
 } from "recharts";
+import { set } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/services/api";
 
@@ -256,3 +257,160 @@ function SummaryCard({ title, value, subtitle, icon, color, loading, trend }: Su
 }
 
 // ─── Componente de Alerta Item ─────────
+
+interface AlertItemProps {
+   icon: React.ReactNode;
+   title: string;
+   subtitle: string;
+   badge: string;
+   badgeColor: "error" | "warning" | "success" | "info";
+}
+function AlertItem({ icon, title, subtitle, badge, badgeColor }: AlertItemProps) {
+   return (
+      <Box
+         sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            py: 1.5,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            "&:last-child": { borderBottom: "none", pb: 8 },
+            "&:first-of-type": { pt: 8 },
+         }}
+      >
+         <Avatar sx={{ bgcolor: `${badgeColor}.50`, width: 36, height: 36, borderRadius: 1.5 }}>
+            <Box sx={{ color: `${badgeColor}.main`, display: "flex" }}>{icon}</Box>
+         </Avatar>
+         <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.3 }} noWrap>
+               {title}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>
+               {subtitle}
+            </Typography>
+         </Box>
+         <Chip
+            label={badge}
+            color={badgeColor}
+            size="small"
+            sx={{ fontSize: 11, height: 22, fontWeight: 700, flexShrink: 0 }}
+         />
+      </Box>
+   );
+}
+export default function DashboardPage() {
+   const { user } = useAuth();
+   const [data, setData] = useSate<DashboardData | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState("");
+
+   useEffect(() => {
+      async function fetchAll() {
+         setLoading(true);
+         setError("");
+         try {
+            const [
+               animalsRes,
+               pasturesRes,
+               pregnanciesRes,
+               estrusRes,
+               vaccinationsRes,
+               birthsRes,
+               mortalitiesRes,
+            ] = await Promise.all([
+               api.get("/animals"),
+               api.get("/pastures?active=true"),
+               api.get("/pregnancies?status=pregnant"),
+               api.get("/estrus/upcoming?dias=14"),
+               api.get("/vaccinations/upcoming?dias=30"),
+               api.get("/births"),
+               api.get("/mortalities"),
+            ]);
+            setData({
+               animals: animalsRes.data,
+               pastures: pasturesRes.data,
+               pregnancies: pregnanciesRes.data,
+               upcomingEstrus: estrusRes.data,
+               upcomingVaccinations: vaccinationsRes.data,
+               recentBirths: birthsRes.data.slice(0, 5),
+               recentMortalities: mortalitiesRes.data.slice(0, 5),
+            });
+         } catch {
+            setError("Não foi possível carregar os dados do Dashboard");
+         } finally {
+            setLoading(false);
+         }
+      }
+      fetchAll();
+   }, []);
+
+   // ─── Dados derivados ────────────
+   const activeAnimals = data?.animals.filter(a => a.status === "active") ?? [];
+   const totalAlerts =
+      (data?.upcomingEstrus.length ?? 0) + (data?.upcomingVaccinations.length ?? 0);
+
+   //Rebanho por categoria para gráficos de pizza
+   const categoryCounts = activeAnimals.reduce<Record<string, number>>((acc, a) => {
+      acc[a.category] = (acc[a.category] ?? 0) + 1;
+      return acc;
+   }, {});
+
+   const pieData = Object.entries(categoryCounts).map(([name, value]) => ({ name, value }));
+   const PIE_COLORS: Record<string, string> = {
+      Touro: "#1B4332",
+      Vaca: "#2D6A4F",
+      Garrote: "#52B788",
+      Novilha: "#74C69D",
+      Bezerro: "#95D5B2",
+      Bezerra: "#B7E4C7",
+   };
+
+   //Nascimento e mortes por mês (ultimos 6 meses)
+   const monthlyData = (() => {
+      const months: Record<string, { mes: string; Nascimentos: number; Mortes: number }> = {};
+      const now = new Date();
+
+      for (let i = 5; i >= 0; i--) {
+         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+         const label = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+         months[key] = {
+            mes: label.charAt(0).toUpperCase() + label.slice(1),
+            Nascimentos: 0,
+            Mortes: 0,
+         };
+      }
+      data?.recentBirths.forEach(b => {
+         const key = b.birthDate.slice(0, 7);
+         if (months[key]) months[key].Nascimentos++;
+      });
+      data?.recentMortalities.forEach(m => {
+         const key = m.deathDate.slice(0, 7);
+         if (months[key]) months[key].Mortes++;
+      });
+
+      return Object.values(months);
+   })();
+
+   // ------ Hora do dia para Saudação
+   const hour = new Date().getHours();
+   const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa Tarde" : "Boa Noite";
+
+   const roleLabel: Record<string, string> = {
+      admin: "Administrador",
+      owner: "Proprietário",
+      farmmanager: "Gerente da fazenda",
+      veterinarian: "Veterinário",
+   };
+
+   // ------------ Render ------------
+   return (
+      {/** -----Header----- */}
+      <Box sx= {{mb:}}>
+
+
+
+      </Box>
+   )
+}
