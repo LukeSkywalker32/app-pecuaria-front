@@ -26,6 +26,8 @@ const FarmsPage = lazy(() => import("@/pages/Farms/FarmsPage"));
 const ProfilePage = lazy(() => import("@/pages/Profile/ProfilePage"));
 const ForgotPassWordPage = lazy(() => import("@/pages/ForgotPassword/ForgotPasswordPage"));
 const BuyersPage = lazy(() => import("@/pages/Buyers/BuyersPage"));
+const BreedsPage = lazy(() => import("@/pages/Breeds/BreedsPage"));
+const AdminLoginPage = lazy(() => import("@/pages/AdminLogin/AdminLoginPage"));
 
 // ─── Spinner exibido enquanto o chunk da página carrega ───────────────────
 function PageLoader() {
@@ -53,6 +55,7 @@ export default function App() {
             <Routes>
                {/* ── Rotas públicas ─────────────────────────────────── */}
                <Route path="/login" element={<LoginPage />} />
+               <Route path="/admin-login" element={<AdminLoginPage />} />
                <Route path="/forgot-password" element={<ForgotPassWordPage />} />
 
                {/* Redireciona raiz para dashboard — ProtectedRoute resolve se está logado */}
@@ -95,6 +98,7 @@ export default function App() {
                <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
                   <Route element={<AppLayout />}>
                      <Route path="/farms" element={<FarmsPage />} />
+                     <Route path="/breeds" element={<BreedsPage />} />
                   </Route>
                </Route>
 

@@ -1,4 +1,5 @@
 import AgricultureIcon from "@mui/icons-material/Agriculture";
+import CategoryIcon from "@mui/icons-material/Category";
 import ChildCareIcon from "@mui/icons-material/ChildCare";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import FavoriteIcon from "@mui/icons-material/Favorite";
@@ -53,12 +54,14 @@ const NAV_ITEMS: NavItem[] = [
    { label: "Partos", path: "/births", icon: <ChildCareIcon /> },
    { label: "Vacinações", path: "/vaccinations", icon: <VaccinesIcon /> },
    { label: "Mortalidade", path: "/mortalities", icon: <HeartBrokenIcon /> },
+
    {
       label: "Manejo",
       path: "/management",
       icon: <SwapHorizIcon />,
       roles: ["admin", "owner", "farmmanager"],
    },
+
    {
       label: "Usuários",
       path: "/users",
@@ -71,6 +74,13 @@ const NAV_ITEMS: NavItem[] = [
       icon: <AgricultureIcon />,
       roles: ["admin"],
    },
+   {
+      label: "Raças",
+      path: "/breeds",
+      icon: <CategoryIcon />,
+      roles: ["admin"],
+   },
+
    {
       label: "Compradores",
       path: "/buyers",

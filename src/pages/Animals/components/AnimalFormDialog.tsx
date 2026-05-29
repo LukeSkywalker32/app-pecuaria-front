@@ -34,7 +34,13 @@ interface Pasture {
    active: boolean;
 }
 
-// ─── Schema de validação com Zod ─────────────────────────────────────────
+interface Breed {
+   id: string;
+   name: string;
+   active: boolean;
+}
+
+// ─── Schema Zod ───────────────────────────────────────────────────────────
 const schema = z.object({
    chipId: z
       .string()
@@ -47,16 +53,13 @@ const schema = z.object({
       .optional()
       .or(z.literal("")),
    name: z.string().min(1, "Nome é obrigatório").max(50, "Nome deve ter no máximo 50 caracteres"),
-   breed: z
-      .string()
-      .min(2, "Raça deve ter pelo menos 2 caracteres")
-      .max(50, "Raça deve ter no máximo 50 caracteres"),
+   // Raça agora é o nome da raça selecionada (string obrigatória)
+   breed: z.string().min(1, "Selecione uma raça"),
    gender: z.enum(["M", "F"], { message: "Sexo é obrigatório" }),
    birthDate: z.string().min(1, "Data de nascimento é obrigatória"),
    origin: z.enum(["born", "purchased"]),
    pastureId: z.string().optional().or(z.literal("")),
    status: z.enum(["active", "quarantine", "treatment", "dead", "sold"]).optional(),
-   // Peso: número positivo até 9999 ou vazio
    weightKg: z
       .string()
       .optional()
@@ -71,7 +74,7 @@ type FormData = z.infer<typeof schema>;
 // ─── Props ────────────────────────────────────────────────────────────────
 interface Props {
    open: boolean;
-   animal: AnimalResponse | null; // null = criar, com dados = editar
+   animal: AnimalResponse | null;
    onClose: (saved: boolean) => void;
 }
 
@@ -80,7 +83,9 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
    const isEditing = !!animal;
 
    const [pastures, setPastures] = useState<Pasture[]>([]);
+   const [breeds, setBreeds] = useState<Breed[]>([]);
    const [pasturesLoading, setPasturesLoading] = useState(false);
+   const [breedsLoading, setBreedsLoading] = useState(false);
    const [submitError, setSubmitError] = useState("");
 
    const {
@@ -108,14 +113,23 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
 
    const originValue = watch("origin");
 
-   // ── Carrega pastos disponíveis ────────────────────────────────────────
+   // ── Carrega pastos e raças ao abrir ───────────────────────────────────
    useEffect(() => {
       if (!open) return;
+
+      // Pastos ativos
       setPasturesLoading(true);
       api.get<Pasture[]>("/pastures?active=true")
          .then(({ data }) => setPastures(data))
          .catch(() => setPastures([]))
          .finally(() => setPasturesLoading(false));
+
+      // Raças ativas (ordenadas por nome — já vêm ordenadas da API)
+      setBreedsLoading(true);
+      api.get<Breed[]>("/breeds?active=true")
+         .then(({ data }) => setBreeds(data))
+         .catch(() => setBreeds([]))
+         .finally(() => setBreedsLoading(false));
    }, [open]);
 
    // ── Preenche formulário no modo edição ───────────────────────────────
@@ -136,8 +150,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
             pastureId: animal.pastureId ?? "",
             status: (["active", "quarantine", "treatment", "dead", "sold"].includes(animal.status)
                ? animal.status
-               : "active") as "active" | "quarantine" | "treatment" | "dead" | "sold",
-            // Converte número para string para o input controlado
+               : "active") as FormData["status"],
             weightKg: animal.weightKg != null ? String(animal.weightKg) : "",
          });
       } else if (open && !animal) {
@@ -161,7 +174,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
    async function onSubmit(data: FormData) {
       setSubmitError("");
       try {
-         // Converte weightKg de string para número (ou undefined se vazio)
          const weightKg =
             data.weightKg && data.weightKg.trim() !== "" ? Number(data.weightKg) : undefined;
 
@@ -203,7 +215,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                   </Alert>
                )}
 
-               {/* ── Seção: Identificação ── */}
+               {/* ── Identificação ── */}
                <Typography
                   variant="caption"
                   sx={{
@@ -227,7 +239,6 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      }
                      {...register("chipId")}
                   />
-
                   <TextField
                      label="Brinco"
                      size="small"
@@ -237,7 +248,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                   />
                </Box>
 
-               {/* ── Seção: Dados básicos ── */}
+               {/* ── Dados do Animal ── */}
                <Typography
                   variant="caption"
                   sx={{
@@ -251,6 +262,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                </Typography>
 
                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 1, mb: 2 }}>
+                  {/* Nome */}
                   <TextField
                      label="Nome *"
                      size="small"
@@ -259,14 +271,36 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      {...register("name")}
                   />
 
-                  <TextField
-                     label="Raça *"
-                     size="small"
-                     error={!!errors.breed}
-                     helperText={errors.breed?.message ?? "Ex: Nelore, Angus, Gir"}
-                     {...register("breed")}
+                  {/* Raça — SELECT via API */}
+                  <Controller
+                     name="breed"
+                     control={control}
+                     render={({ field }) => (
+                        <FormControl size="small" error={!!errors.breed}>
+                           <InputLabel>Raça *</InputLabel>
+                           <Select {...field} label="Raça *" disabled={breedsLoading} displayEmpty>
+                              {breedsLoading ? (
+                                 <MenuItem disabled>
+                                    <CircularProgress size={16} sx={{ mr: 1 }} /> Carregando...
+                                 </MenuItem>
+                              ) : breeds.length === 0 ? (
+                                 <MenuItem disabled>Nenhuma raça cadastrada</MenuItem>
+                              ) : (
+                                 breeds.map(b => (
+                                    <MenuItem key={b.id} value={b.name}>
+                                       {b.name}
+                                    </MenuItem>
+                                 ))
+                              )}
+                           </Select>
+                           <FormHelperText>
+                              {errors.breed?.message ?? "Selecione a raça do animal"}
+                           </FormHelperText>
+                        </FormControl>
+                     )}
                   />
 
+                  {/* Sexo */}
                   <Controller
                      name="gender"
                      control={control}
@@ -284,6 +318,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      )}
                   />
 
+                  {/* Data de nascimento */}
                   <TextField
                      label="Data de Nascimento *"
                      size="small"
@@ -297,7 +332,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      {...register("birthDate")}
                   />
 
-                  {/* ── Peso — ocupa coluna inteira no grid ── */}
+                  {/* Peso */}
                   <TextField
                      label="Peso"
                      size="small"
@@ -314,7 +349,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                   />
                </Box>
 
-               {/* ── Seção: Origem e localização ── */}
+               {/* ── Origem e Localização ── */}
                <Typography
                   variant="caption"
                   sx={{
@@ -388,7 +423,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                   </Alert>
                )}
 
-               {/* ── Seção: Status (apenas edição) ── */}
+               {/* ── Status ── */}
                <Box sx={{ mt: 2 }}>
                   <Typography
                      variant="caption"
@@ -407,7 +442,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      render={({ field }) => (
                         <FormControl size="small" fullWidth sx={{ mt: 1 }}>
                            <InputLabel>Status</InputLabel>
-                           <Select {...field} labelId="status">
+                           <Select {...field} label="Status">
                               <MenuItem value="active">Ativo</MenuItem>
                               <MenuItem value="quarantine">Quarentena</MenuItem>
                               <MenuItem value="treatment">Tratamento</MenuItem>
@@ -426,18 +461,14 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
             <Divider />
 
             <DialogActions sx={{ p: 2, gap: 1 }}>
-               <Button
-                  onClick={() => onClose(false)}
-                  disabled={isSubmitting}
-                  sx={{ padding: "10px" }}
-               >
+               <Button onClick={() => onClose(false)} disabled={isSubmitting}>
                   Cancelar
                </Button>
                <Button
                   type="submit"
                   variant="contained"
                   disabled={isSubmitting}
-                  sx={{ padding: "10px" }}
+                  sx={{ px: 3 }}
                   startIcon={
                      isSubmitting ? <CircularProgress size={16} color="inherit" /> : undefined
                   }
