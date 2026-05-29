@@ -22,6 +22,7 @@ import {
    Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
+import { useAdminFarm } from "@/contexts/AdminFarmContext";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/services/api";
 
@@ -448,6 +449,7 @@ function SimpleBarChart({ data }: BarChartProps) {
 
 export default function DashboardPage() {
    const { user } = useAuth();
+   const isAdmin = user?.role === "admin";
    const [data, setData] = useState<DashboardData | null>(null);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState("");
