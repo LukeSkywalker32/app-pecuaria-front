@@ -445,6 +445,17 @@ function SimpleBarChart({ data }: BarChartProps) {
    );
 }
 
+function AdminFarmWarning() {
+   const { selectedFarm } = useAdminFarm();
+   if (selectedFarm) return null;
+   return (
+      <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>
+         <strong>Nenhuma fazenda selecionada.</strong>Escolha uma fazenda na barra lateral para
+         visualizar os dados
+      </Alert>
+   );
+}
+
 // ─── Componente Principal ─────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -567,6 +578,8 @@ export default function DashboardPage() {
                })}
             </Typography>
          </Box>
+         {/* Renderização condicional do aviso para Admin */}
+         {isAdmin && <AdminFarmWarning />}
 
          {error && (
             <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError("")}>
