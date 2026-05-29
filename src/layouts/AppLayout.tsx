@@ -24,7 +24,6 @@ import {
    Drawer,
    FormControl,
    IconButton,
-   InputLabel,
    List,
    ListItemButton,
    ListItemIcon,
@@ -54,7 +53,12 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
    { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
    { label: "Animais", path: "/animals", icon: <PetsIcon /> },
-   { label: "Pastos", path: "/pastures", icon: <GrassIcon /> },
+   {
+      label: "Pastos",
+      path: "/pastures",
+      icon: <GrassIcon />,
+      roles: ["admin", "owner", "farmmanager"],
+   },
    { label: "Brincos", path: "/ear-tags", icon: <LabelIcon /> },
    { label: "CIO", path: "/estrus", icon: <FavoriteIcon /> },
    { label: "Prenhez", path: "/pregnancies", icon: <LocalHospitalIcon /> },
