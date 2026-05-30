@@ -2,6 +2,8 @@ import AgricultureIcon from "@mui/icons-material/Agriculture";
 import BabyChangingStationIcon from "@mui/icons-material/BabyChangingStation";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import HeartBrokenIcon from "@mui/icons-material/HeartBroken";
+import LabelIcon from "@mui/icons-material/Label";
+import LabelOffIcon from "@mui/icons-material/LabelOff";
 import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import PetsIcon from "@mui/icons-material/Pets";
@@ -22,9 +24,30 @@ import {
    Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
-import { useAdminFarm } from "@/contexts/AdminFarmContext";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/services/api";
+
+// ─── Aviso para admin sem fazenda selecionada ──────────────────────────────
+// Componente separado pois useAdminFarm só existe quando o AdminFarmProvider
+// está no contexto (apenas para admin). Evita chamada condicional de hook.
+function AdminFarmWarning() {
+   // Importação dinâmica para não quebrar quando não há provider
+   try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { useAdminFarm } = require("@/contexts/AdminFarmContext");
+      const { selectedFarm } = useAdminFarm();
+      if (selectedFarm) return null;
+      return (
+         <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>
+            <strong>Nenhuma fazenda selecionada.</strong> Escolha uma fazenda na barra lateral para
+            visualizar os dados do dashboard.
+         </Alert>
+      );
+   } catch {
+      return null;
+   }
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
@@ -37,7 +60,7 @@ interface Animal {
    birthDate: string;
    ageInMonths: number;
    pastureName: string | null;
-   currentEarTag: string | null;
+   currentEarTag: string | null; // null = sem brinco ativo
 }
 
 interface Pasture {
@@ -133,7 +156,6 @@ function occupancyColor(rate: number): string {
    return "#1B4332";
 }
 
-// ─── Cores por categoria ──────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
    Touro: "#1B4332",
    Vaca: "#2D6A4F",
@@ -152,22 +174,41 @@ interface SummaryCardProps {
    icon: React.ReactNode;
    color: string;
    loading?: boolean;
+   alert?: boolean; // destaca em laranja/vermelho quando há problema
+   onClick?: () => void;
 }
 
-function SummaryCard({ title, value, subtitle, icon, color, loading }: SummaryCardProps) {
+function SummaryCard({
+   title,
+   value,
+   subtitle,
+   icon,
+   color,
+   loading,
+   alert,
+   onClick,
+}: SummaryCardProps) {
    return (
       <Paper
          elevation={0}
+         onClick={onClick}
          sx={{
             border: "1px solid",
-            borderColor: "divider",
+            borderColor: alert ? "warning.300" : "divider",
+            bgcolor: alert ? "#FFFBEB" : "background.paper",
             borderRadius: 3,
             p: 2.5,
             height: "100%",
             position: "relative",
             overflow: "hidden",
-            transition: "box-shadow 0.2s",
-            "&:hover": { boxShadow: "0 4px 20px rgba(27,67,50,0.1)" },
+            transition: "box-shadow 0.2s, transform 0.15s",
+            cursor: onClick ? "pointer" : "default",
+            "&:hover": {
+               boxShadow: onClick
+                  ? "0 4px 20px rgba(27,67,50,0.15)"
+                  : "0 4px 20px rgba(27,67,50,0.1)",
+               transform: onClick ? "translateY(-1px)" : "none",
+            },
          }}
       >
          <Box
@@ -187,7 +228,7 @@ function SummaryCard({ title, value, subtitle, icon, color, loading }: SummaryCa
                <Typography
                   variant="caption"
                   sx={{
-                     color: "text.secondary",
+                     color: alert ? "warning.dark" : "text.secondary",
                      fontWeight: 700,
                      textTransform: "uppercase",
                      letterSpacing: 0.8,
@@ -200,7 +241,12 @@ function SummaryCard({ title, value, subtitle, icon, color, loading }: SummaryCa
                ) : (
                   <Typography
                      variant="h3"
-                     sx={{ fontWeight: 800, color: "text.primary", lineHeight: 1.1, mt: 0.5 }}
+                     sx={{
+                        fontWeight: 800,
+                        color: alert ? "warning.dark" : "text.primary",
+                        lineHeight: 1.1,
+                        mt: 0.5,
+                     }}
                   >
                      {value}
                   </Typography>
@@ -208,14 +254,23 @@ function SummaryCard({ title, value, subtitle, icon, color, loading }: SummaryCa
                {subtitle && !loading && (
                   <Typography
                      variant="caption"
-                     color="text.secondary"
+                     color={alert ? "warning.dark" : "text.secondary"}
                      sx={{ mt: 0.5, display: "block" }}
                   >
                      {subtitle}
                   </Typography>
                )}
             </Box>
-            <Avatar sx={{ bgcolor: color, width: 48, height: 48, borderRadius: 2 }}>{icon}</Avatar>
+            <Avatar
+               sx={{
+                  bgcolor: alert ? "#F59E0B" : color,
+                  width: 48,
+                  height: 48,
+                  borderRadius: 2,
+               }}
+            >
+               {icon}
+            </Avatar>
          </Box>
       </Paper>
    );
@@ -229,11 +284,13 @@ interface AlertItemProps {
    subtitle: string;
    badge: string;
    badgeColor: "error" | "warning" | "success" | "info";
+   onClick?: () => void;
 }
 
-function AlertItem({ icon, title, subtitle, badge, badgeColor }: AlertItemProps) {
+function AlertItem({ icon, title, subtitle, badge, badgeColor, onClick }: AlertItemProps) {
    return (
       <Box
+         onClick={onClick}
          sx={{
             display: "flex",
             alignItems: "center",
@@ -241,8 +298,13 @@ function AlertItem({ icon, title, subtitle, badge, badgeColor }: AlertItemProps)
             py: 1.5,
             borderBottom: "1px solid",
             borderColor: "divider",
+            cursor: onClick ? "pointer" : "default",
+            borderRadius: onClick ? 1 : 0,
+            px: onClick ? 0.5 : 0,
+            transition: "background 0.15s",
             "&:last-child": { borderBottom: "none", pb: 0 },
             "&:first-of-type": { pt: 0 },
+            "&:hover": onClick ? { bgcolor: "rgba(27,67,50,0.04)" } : {},
          }}
       >
          <Avatar sx={{ bgcolor: `${badgeColor}.50`, width: 36, height: 36, borderRadius: 1.5 }}>
@@ -266,7 +328,7 @@ function AlertItem({ icon, title, subtitle, badge, badgeColor }: AlertItemProps)
    );
 }
 
-// ─── Gráfico de Donut CSS puro ────────────────────────────────────────────
+// ─── Gráfico Donut ────────────────────────────────────────────────────────
 
 interface DonutChartProps {
    data: Array<{ name: string; value: number }>;
@@ -274,7 +336,6 @@ interface DonutChartProps {
 }
 
 function DonutChart({ data, total }: DonutChartProps) {
-   // Calcula os segmentos usando conic-gradient
    let cumulative = 0;
    const segments = data.map(d => {
       const pct = total > 0 ? (d.value / total) * 100 : 0;
@@ -292,7 +353,6 @@ function DonutChart({ data, total }: DonutChartProps) {
 
    return (
       <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-         {/* Donut */}
          <Box sx={{ position: "relative", width: 180, height: 180, flexShrink: 0 }}>
             <Box
                sx={{
@@ -302,7 +362,6 @@ function DonutChart({ data, total }: DonutChartProps) {
                   background: total > 0 ? `conic-gradient(${gradient})` : "#E5E7EB",
                }}
             />
-            {/* Buraco central */}
             <Box
                sx={{
                   position: "absolute",
@@ -330,8 +389,6 @@ function DonutChart({ data, total }: DonutChartProps) {
                </Typography>
             </Box>
          </Box>
-
-         {/* Legenda */}
          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, justifyContent: "center" }}>
             {segments.map(s => (
                <Box key={s.name} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -354,7 +411,7 @@ function DonutChart({ data, total }: DonutChartProps) {
    );
 }
 
-// ─── Gráfico de Barras CSS puro ───────────────────────────────────────────
+// ─── Gráfico de Barras ────────────────────────────────────────────────────
 
 interface BarChartProps {
    data: Array<{ mes: string; Nascimentos: number; Mortes: number }>;
@@ -365,7 +422,6 @@ function SimpleBarChart({ data }: BarChartProps) {
 
    return (
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1, height: "100%" }}>
-         {/* Barras */}
          <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1.5, flex: 1, px: 1 }}>
             {data.map(d => (
                <Box
@@ -388,7 +444,6 @@ function SimpleBarChart({ data }: BarChartProps) {
                         gap: "2px",
                      }}
                   >
-                     {/* Barra Nascimentos */}
                      <Tooltip title={`${d.Nascimentos} nascimento(s)`} placement="top">
                         <Box
                            sx={{
@@ -403,7 +458,6 @@ function SimpleBarChart({ data }: BarChartProps) {
                            }}
                         />
                      </Tooltip>
-                     {/* Barra Mortes */}
                      <Tooltip title={`${d.Mortes} morte(s)`} placement="top">
                         <Box
                            sx={{
@@ -425,8 +479,6 @@ function SimpleBarChart({ data }: BarChartProps) {
                </Box>
             ))}
          </Box>
-
-         {/* Legenda */}
          <Box sx={{ display: "flex", gap: 2, justifyContent: "center" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                <Box sx={{ width: 10, height: 10, bgcolor: "#52B788", borderRadius: 0.5 }} />
@@ -445,14 +497,218 @@ function SimpleBarChart({ data }: BarChartProps) {
    );
 }
 
-function AdminFarmWarning() {
-   const { selectedFarm } = useAdminFarm();
-   if (selectedFarm) return null;
+// ─── Seção: Identificação por Brincos ────────────────────────────────────
+
+interface EarTagSectionProps {
+   activeAnimals: Animal[];
+   loading: boolean;
+   onNavigate: () => void;
+}
+
+function EarTagSection({ activeAnimals, loading, onNavigate }: EarTagSectionProps) {
+   const semBrinco = activeAnimals.filter(a => !a.currentEarTag);
+   const comBrinco = activeAnimals.filter(a => !!a.currentEarTag);
+   const pctIdentificados =
+      activeAnimals.length > 0 ? Math.round((comBrinco.length / activeAnimals.length) * 100) : 0;
+
    return (
-      <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>
-         <strong>Nenhuma fazenda selecionada.</strong>Escolha uma fazenda na barra lateral para
-         visualizar os dados
-      </Alert>
+      <Paper
+         elevation={0}
+         sx={{ border: "1px solid", borderColor: "divider", borderRadius: 3, p: 2.5 }}
+      >
+         <Box
+            sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}
+         >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+               <LabelIcon sx={{ color: "primary.main", fontSize: 20 }} />
+               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Identificação por Brincos
+               </Typography>
+            </Box>
+            <Typography
+               variant="caption"
+               sx={{
+                  color: "primary.main",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  "&:hover": { textDecoration: "underline" },
+               }}
+               onClick={onNavigate}
+            >
+               Ver todos →
+            </Typography>
+         </Box>
+
+         {loading ? (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+               <Skeleton height={32} />
+               <Skeleton height={32} />
+            </Box>
+         ) : (
+            <>
+               {/* Barra de progresso geral */}
+               <Box sx={{ mb: 2 }}>
+                  <Box
+                     sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        mb: 0.5,
+                     }}
+                  >
+                     <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        {comBrinco.length} de {activeAnimals.length} animais identificados
+                     </Typography>
+                     <Typography
+                        variant="caption"
+                        sx={{
+                           fontWeight: 800,
+                           color: pctIdentificados === 100 ? "success.main" : "warning.dark",
+                        }}
+                     >
+                        {pctIdentificados}%
+                     </Typography>
+                  </Box>
+                  <Tooltip
+                     title={`${pctIdentificados}% dos animais ativos possuem brinco identificado`}
+                     placement="top"
+                  >
+                     <LinearProgress
+                        variant="determinate"
+                        value={pctIdentificados}
+                        sx={{
+                           height: 10,
+                           borderRadius: 5,
+                           bgcolor: "#E5E7EB",
+                           "& .MuiLinearProgress-bar": {
+                              bgcolor: pctIdentificados === 100 ? "#1B4332" : "#F59E0B",
+                              borderRadius: 5,
+                           },
+                        }}
+                     />
+                  </Tooltip>
+               </Box>
+
+               {/* Animais sem brinco */}
+               {semBrinco.length === 0 ? (
+                  <Box
+                     sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        p: 1.5,
+                        borderRadius: 2,
+                        bgcolor: "#F0FFF4",
+                        border: "1px solid",
+                        borderColor: "success.200",
+                     }}
+                  >
+                     <LabelIcon sx={{ color: "success.main", fontSize: 18 }} />
+                     <Typography variant="body2" sx={{ fontWeight: 600, color: "success.dark" }}>
+                        Todos os animais ativos estão identificados
+                     </Typography>
+                  </Box>
+               ) : (
+                  <Box>
+                     <Box
+                        sx={{
+                           display: "flex",
+                           alignItems: "center",
+                           gap: 1,
+                           p: 1.5,
+                           borderRadius: 2,
+                           bgcolor: "#FFFBEB",
+                           border: "1px solid",
+                           borderColor: "warning.300",
+                           mb: 1.5,
+                           cursor: "pointer",
+                           "&:hover": { bgcolor: "#FEF3C7" },
+                        }}
+                        onClick={onNavigate}
+                     >
+                        <LabelOffIcon sx={{ color: "warning.main", fontSize: 18 }} />
+                        <Box sx={{ flex: 1 }}>
+                           <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 700, color: "warning.dark" }}
+                           >
+                              {semBrinco.length}{" "}
+                              {semBrinco.length === 1 ? "animal sem brinco" : "animais sem brinco"}
+                           </Typography>
+                           <Typography variant="caption" color="text.secondary">
+                              Clique para registrar identificação
+                           </Typography>
+                        </Box>
+                        <Chip
+                           label="Atenção"
+                           color="warning"
+                           size="small"
+                           sx={{ fontSize: 11, height: 22, fontWeight: 700 }}
+                        />
+                     </Box>
+
+                     {/* Lista dos primeiros animais sem brinco */}
+                     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                        {semBrinco.slice(0, 4).map(a => (
+                           <Box
+                              key={a.id}
+                              sx={{
+                                 display: "flex",
+                                 alignItems: "center",
+                                 justifyContent: "space-between",
+                                 py: 0.75,
+                                 px: 1,
+                                 borderRadius: 1.5,
+                                 bgcolor: "#FAFAFA",
+                                 border: "1px solid",
+                                 borderColor: "divider",
+                              }}
+                           >
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                 <LabelOffIcon sx={{ fontSize: 14, color: "text.disabled" }} />
+                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    {a.name}
+                                 </Typography>
+                              </Box>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                 <Typography variant="caption" color="text.secondary">
+                                    {a.category}
+                                 </Typography>
+                                 <Chip
+                                    label="Sem brinco"
+                                    size="small"
+                                    sx={{
+                                       fontSize: 10,
+                                       height: 20,
+                                       bgcolor: "#FEF3C7",
+                                       color: "#92400E",
+                                       fontWeight: 700,
+                                    }}
+                                 />
+                              </Box>
+                           </Box>
+                        ))}
+                        {semBrinco.length > 4 && (
+                           <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                 textAlign: "center",
+                                 mt: 0.5,
+                                 cursor: "pointer",
+                                 "&:hover": { color: "primary.main" },
+                              }}
+                              onClick={onNavigate}
+                           >
+                              +{semBrinco.length - 4} mais sem brinco — ver todos
+                           </Typography>
+                        )}
+                     </Box>
+                  </Box>
+               )}
+            </>
+         )}
+      </Paper>
    );
 }
 
@@ -460,7 +716,9 @@ function AdminFarmWarning() {
 
 export default function DashboardPage() {
    const { user } = useAuth();
+   const navigate = useNavigate();
    const isAdmin = user?.role === "admin";
+
    const [data, setData] = useState<DashboardData | null>(null);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState("");
@@ -509,8 +767,13 @@ export default function DashboardPage() {
    // ─── Dados derivados ──────────────────────────────────────────────────
 
    const activeAnimals = data?.animals.filter(a => a.status === "active") ?? [];
+   const animaisSemBrinco = activeAnimals.filter(a => !a.currentEarTag);
+
+   // Alertas: CIOs + vacinas + animais sem brinco (se > 0)
    const totalAlerts =
-      (data?.upcomingEstrus.length ?? 0) + (data?.upcomingVaccinations.length ?? 0);
+      (data?.upcomingEstrus.length ?? 0) +
+      (data?.upcomingVaccinations.length ?? 0) +
+      animaisSemBrinco.length;
 
    const categoryCounts = activeAnimals.reduce<Record<string, number>>((acc, a) => {
       acc[a.category] = (acc[a.category] ?? 0) + 1;
@@ -578,7 +841,8 @@ export default function DashboardPage() {
                })}
             </Typography>
          </Box>
-         {/* Renderização condicional do aviso para Admin */}
+
+         {/* ── Aviso admin sem fazenda ── */}
          {isAdmin && <AdminFarmWarning />}
 
          {error && (
@@ -595,8 +859,9 @@ export default function DashboardPage() {
                   value={loading ? "—" : activeAnimals.length}
                   subtitle={`${data?.animals.filter(a => a.status === "dead").length ?? 0} mortos · ${data?.animals.filter(a => a.status === "sold").length ?? 0} vendidos`}
                   icon={<PetsIcon sx={{ fontSize: 22 }} />}
-                  color="#1B4332"
+                  color="#1b4333c9"
                   loading={loading}
+                  onClick={() => navigate("/animals")}
                />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -607,6 +872,7 @@ export default function DashboardPage() {
                   icon={<AgricultureIcon sx={{ fontSize: 22 }} />}
                   color="#2D6A4F"
                   loading={loading}
+                  onClick={() => navigate("/pastures")}
                />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -617,23 +883,24 @@ export default function DashboardPage() {
                   icon={<LocalHospitalIcon sx={{ fontSize: 22 }} />}
                   color="#52B788"
                   loading={loading}
+                  onClick={() => navigate("/pregnancies")}
                />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
                <SummaryCard
                   title="Alertas Pendentes"
                   value={loading ? "—" : totalAlerts}
-                  subtitle={`${data?.upcomingEstrus.length ?? 0} CIOs · ${data?.upcomingVaccinations.length ?? 0} vacinas`}
+                  subtitle={`${data?.upcomingEstrus.length ?? 0} CIOs · ${data?.upcomingVaccinations.length ?? 0} vacinas · ${animaisSemBrinco.length} sem brinco`}
                   icon={<TrendingUpIcon sx={{ fontSize: 22 }} />}
-                  color={totalAlerts > 0 ? "#F59E0B" : "#1B4332"}
+                  color={totalAlerts > 0 ? "#F59E0B" : "#1b4332c7"}
                   loading={loading}
+                  alert={totalAlerts > 0}
                />
             </Grid>
          </Grid>
 
          {/* ══ LINHA 2 — Gráficos ══ */}
          <Grid container spacing={2.5} sx={{ mb: 3 }}>
-            {/* Donut — Rebanho por categoria */}
             <Grid size={{ xs: 12, md: 5 }}>
                <Paper
                   elevation={0}
@@ -651,7 +918,6 @@ export default function DashboardPage() {
                   <Typography variant="caption" color="text.secondary">
                      Apenas animais ativos
                   </Typography>
-
                   <Box sx={{ mt: 2, display: "flex", justifyContent: "center" }}>
                      {loading ? (
                         <Box
@@ -684,7 +950,6 @@ export default function DashboardPage() {
                </Paper>
             </Grid>
 
-            {/* Barras — Nascimentos x Mortes */}
             <Grid size={{ xs: 12, md: 7 }}>
                <Paper
                   elevation={0}
@@ -702,7 +967,6 @@ export default function DashboardPage() {
                   <Typography variant="caption" color="text.secondary">
                      Últimos 6 meses
                   </Typography>
-
                   {loading ? (
                      <Box
                         sx={{
@@ -723,103 +987,132 @@ export default function DashboardPage() {
             </Grid>
          </Grid>
 
-         {/* ══ LINHA 3 — Ocupação dos Pastos ══ */}
-         <Paper
-            elevation={0}
-            sx={{ border: "1px solid", borderColor: "divider", borderRadius: 3, p: 2.5, mb: 3 }}
-         >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-               <AgricultureIcon sx={{ color: "primary.main", fontSize: 20 }} />
-               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  Ocupação dos Pastos
-               </Typography>
-               <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
-                  {data?.pastures.length ?? 0} pastos ativos
-               </Typography>
-            </Box>
+         {/* ══ LINHA 3 — Brincos + Ocupação dos Pastos ══ */}
+         <Grid container spacing={2.5} sx={{ mb: 3 }}>
+            {/* Seção de Brincos */}
+            <Grid size={{ xs: 12, md: 5 }}>
+               <EarTagSection
+                  activeAnimals={activeAnimals}
+                  loading={loading}
+                  onNavigate={() => navigate("/ear-tags")}
+               />
+            </Grid>
 
-            {loading ? (
-               <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                  {[1, 2, 3].map(i => (
-                     <Skeleton key={i} height={48} sx={{ borderRadius: 1 }} />
-                  ))}
-               </Box>
-            ) : data?.pastures.length === 0 ? (
-               <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ textAlign: "center", py: 2 }}
+            {/* Ocupação dos Pastos */}
+            <Grid size={{ xs: 12, md: 7 }}>
+               <Paper
+                  elevation={0}
+                  sx={{
+                     border: "1px solid",
+                     borderColor: "divider",
+                     borderRadius: 3,
+                     p: 2.5,
+                     height: "100%",
+                  }}
                >
-                  Nenhum pasto cadastrado
-               </Typography>
-            ) : (
-               <Grid container spacing={2}>
-                  {data?.pastures.map(pasture => (
-                     <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={pasture.id}>
-                        <Box
-                           sx={{
-                              p: 1.5,
-                              borderRadius: 2,
-                              border: "1px solid",
-                              borderColor: pasture.occupancyRate >= 90 ? "error.200" : "divider",
-                              bgcolor: pasture.occupancyRate >= 90 ? "#FEF2F2" : "transparent",
-                           }}
-                        >
-                           <Box
-                              sx={{
-                                 display: "flex",
-                                 justifyContent: "space-between",
-                                 alignItems: "center",
-                                 mb: 1,
-                              }}
-                           >
-                              <Box>
-                                 <Typography
-                                    variant="body2"
-                                    sx={{ fontWeight: 700, lineHeight: 1.2 }}
-                                 >
-                                    {pasture.name}
-                                 </Typography>
-                                 <Typography variant="caption" color="text.secondary">
-                                    {pasture.currentAnimals} / {pasture.animalCapacity} animais
-                                 </Typography>
-                              </Box>
-                              <Typography
-                                 variant="body2"
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                     <AgricultureIcon sx={{ color: "primary.main", fontSize: 20 }} />
+                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        Ocupação dos Pastos
+                     </Typography>
+                     <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+                        {data?.pastures.length ?? 0} ativos
+                     </Typography>
+                  </Box>
+
+                  {loading ? (
+                     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                        {[1, 2, 3].map(i => (
+                           <Skeleton key={i} height={48} sx={{ borderRadius: 1 }} />
+                        ))}
+                     </Box>
+                  ) : data?.pastures.length === 0 ? (
+                     <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ textAlign: "center", py: 2 }}
+                     >
+                        Nenhum pasto cadastrado
+                     </Typography>
+                  ) : (
+                     <Grid container spacing={2}>
+                        {data?.pastures.map(pasture => (
+                           <Grid size={{ xs: 12, sm: 6 }} key={pasture.id}>
+                              <Box
                                  sx={{
-                                    fontWeight: 800,
-                                    color: occupancyColor(pasture.occupancyRate),
-                                    fontSize: 15,
+                                    p: 1.5,
+                                    borderRadius: 2,
+                                    border: "1px solid",
+                                    borderColor:
+                                       pasture.occupancyRate >= 90 ? "error.200" : "divider",
+                                    bgcolor:
+                                       pasture.occupancyRate >= 90 ? "#FEF2F2" : "transparent",
+                                    cursor: "pointer",
+                                    "&:hover": { bgcolor: "rgba(27,67,50,0.04)" },
                                  }}
+                                 onClick={() => navigate("/pastures")}
                               >
-                                 {pasture.occupancyRate}%
-                              </Typography>
-                           </Box>
-                           <Tooltip title={`${pasture.occupancyRate}% ocupado`} placement="top">
-                              <LinearProgress
-                                 variant="determinate"
-                                 value={Math.min(pasture.occupancyRate, 100)}
-                                 sx={{
-                                    height: 8,
-                                    borderRadius: 4,
-                                    bgcolor: "#E5E7EB",
-                                    "& .MuiLinearProgress-bar": {
-                                       bgcolor: occupancyColor(pasture.occupancyRate),
-                                       borderRadius: 4,
-                                    },
-                                 }}
-                              />
-                           </Tooltip>
-                        </Box>
+                                 <Box
+                                    sx={{
+                                       display: "flex",
+                                       justifyContent: "space-between",
+                                       alignItems: "center",
+                                       mb: 1,
+                                    }}
+                                 >
+                                    <Box>
+                                       <Typography
+                                          variant="body2"
+                                          sx={{ fontWeight: 700, lineHeight: 1.2 }}
+                                       >
+                                          {pasture.name}
+                                       </Typography>
+                                       <Typography variant="caption" color="text.secondary">
+                                          {pasture.currentAnimals} / {pasture.animalCapacity}{" "}
+                                          animais
+                                       </Typography>
+                                    </Box>
+                                    <Typography
+                                       variant="body2"
+                                       sx={{
+                                          fontWeight: 800,
+                                          color: occupancyColor(pasture.occupancyRate),
+                                          fontSize: 15,
+                                       }}
+                                    >
+                                       {pasture.occupancyRate}%
+                                    </Typography>
+                                 </Box>
+                                 <Tooltip
+                                    title={`${pasture.occupancyRate}% ocupado`}
+                                    placement="top"
+                                 >
+                                    <LinearProgress
+                                       variant="determinate"
+                                       value={Math.min(pasture.occupancyRate, 100)}
+                                       sx={{
+                                          height: 8,
+                                          borderRadius: 4,
+                                          bgcolor: "#E5E7EB",
+                                          "& .MuiLinearProgress-bar": {
+                                             bgcolor: occupancyColor(pasture.occupancyRate),
+                                             borderRadius: 4,
+                                          },
+                                       }}
+                                    />
+                                 </Tooltip>
+                              </Box>
+                           </Grid>
+                        ))}
                      </Grid>
-                  ))}
-               </Grid>
-            )}
-         </Paper>
+                  )}
+               </Paper>
+            </Grid>
+         </Grid>
 
          {/* ══ LINHA 4 — Alertas + Eventos Recentes ══ */}
          <Grid container spacing={2.5}>
-            {/* Alertas prioritários */}
+            {/* Alertas */}
             <Grid size={{ xs: 12, md: 6 }}>
                <Paper
                   elevation={0}
@@ -863,6 +1156,19 @@ export default function DashboardPage() {
                      </Box>
                   ) : (
                      <Box>
+                        {/* Alertas: animais sem brinco */}
+                        {animaisSemBrinco.length > 0 && (
+                           <AlertItem
+                              icon={<LabelOffIcon sx={{ fontSize: 16 }} />}
+                              title={`${animaisSemBrinco.length} ${animaisSemBrinco.length === 1 ? "animal" : "animais"} sem brinco`}
+                              subtitle="Animais ativos sem identificação por brinco"
+                              badge={`${animaisSemBrinco.length}`}
+                              badgeColor="warning"
+                              onClick={() => navigate("/ear-tags")}
+                           />
+                        )}
+
+                        {/* Alertas: CIOs próximos */}
                         {data?.upcomingEstrus.map(e => {
                            const days = daysUntil(e.nextEstrus);
                            return (
@@ -873,9 +1179,12 @@ export default function DashboardPage() {
                                  subtitle={`Previsto para ${formatDate(e.nextEstrus)}`}
                                  badge={days <= 0 ? "Hoje" : `${days}d`}
                                  badgeColor={urgencyColor(Math.max(days, 0))}
+                                 onClick={() => navigate("/estrus")}
                               />
                            );
                         })}
+
+                        {/* Alertas: vacinas próximas */}
                         {data?.upcomingVaccinations.map(v => {
                            if (!v.nextDoseDate) return null;
                            const days = daysUntil(v.nextDoseDate);
@@ -887,6 +1196,7 @@ export default function DashboardPage() {
                                  subtitle={`Próxima dose em ${formatDate(v.nextDoseDate)}`}
                                  badge={days <= 0 ? "Vencida" : `${days}d`}
                                  badgeColor={urgencyColor(Math.max(days, 0))}
+                                 onClick={() => navigate("/vaccinations")}
                               />
                            );
                         })}
@@ -937,6 +1247,7 @@ export default function DashboardPage() {
                                  }
                                  badge="Prenhe"
                                  badgeColor="info"
+                                 onClick={() => navigate("/pregnancies")}
                               />
                            );
                         })}
@@ -948,6 +1259,7 @@ export default function DashboardPage() {
                               subtitle={`${daysAgo(b.birthDate)}d atrás · ${b.situation === "normal" ? "Normal" : "Natimorto"} · ${b.calfGender === "M" ? "Bezerro" : b.calfGender === "F" ? "Bezerra" : "—"}`}
                               badge={formatDate(b.birthDate)}
                               badgeColor={b.situation === "normal" ? "success" : "error"}
+                              onClick={() => navigate("/births")}
                            />
                         ))}
                         {data?.recentMortalities.slice(0, 2).map(m => (
@@ -958,6 +1270,7 @@ export default function DashboardPage() {
                               subtitle={`${daysAgo(m.deathDate)}d atrás · ${m.causeOfDeath}`}
                               badge={formatDate(m.deathDate)}
                               badgeColor="error"
+                              onClick={() => navigate("/mortalities")}
                            />
                         ))}
                         {data?.pregnancies.length === 0 &&
