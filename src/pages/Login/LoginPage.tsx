@@ -21,10 +21,10 @@ import {
    Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/useAuth";
 import api from "@/services/api";
 
-// ─── Tipo da fazenda pública ───────────────────────────────────────────────
 interface PublicFarm {
    id: string;
    name: string;
@@ -32,51 +32,41 @@ interface PublicFarm {
    logoUrl: string | null;
 }
 
-// ─── Helper: initials do nome da fazenda ──────────────────────────────────
 function getInitials(name: string): string {
    return name
       .split(" ")
-      .filter(w => w.length > 2) // ignora palavras curtas (de, da, do…)
+      .filter(w => w.length > 2)
       .slice(0, 2)
       .map(w => w[0].toUpperCase())
       .join("");
 }
 
-// ─── Componente ───────────────────────────────────────────────────────────
 export default function LoginPage() {
    const navigate = useNavigate();
+   const { login } = useAuth();
 
-   // Passo atual do fluxo: 1 = seleção de fazenda | 2 = credenciais
    const [step, setStep] = useState<1 | 2>(1);
 
-   // Estado das fazendas (carregadas da API pública)
    const [farms, setFarms] = useState<PublicFarm[]>([]);
    const [farmsLoading, setFarmsLoading] = useState(true);
    const [farmsError, setFarmsError] = useState(false);
 
-   // Fazenda selecionada pelo usuário
    const [selectedFarmId, setSelectedFarmId] = useState("");
    const [selectedFarm, setSelectedFarm] = useState<PublicFarm | null>(null);
 
-   // Credenciais
    const [username, setUsername] = useState("");
    const [password, setPassword] = useState("");
    const [showPassword, setShowPassword] = useState(false);
 
-   // Estados de submissão
    const [loginLoading, setLoginLoading] = useState(false);
    const [loginError, setLoginError] = useState("");
 
-   // ─── Busca fazendas na API ao montar ────────────────────────────────────
-   // GET /api/farms/public — sem token, rota pública
-   // GET /api/farms/public — sem token, rota pública
    const fetchFarms = useCallback(() => {
       setFarmsLoading(true);
       setFarmsError(false);
       api.get<PublicFarm[]>("/farms/public")
          .then(({ data }) => {
             setFarms(data);
-            // Se só existir uma fazenda, já pré-seleciona
             if (data.length === 1) {
                setSelectedFarmId(data[0].id);
             }
@@ -89,7 +79,6 @@ export default function LoginPage() {
       fetchFarms();
    }, [fetchFarms]);
 
-   // ─── Avança para o passo 2 ──────────────────────────────────────────────
    function handleSelectFarm() {
       const farm = farms.find(f => f.id === selectedFarmId) ?? null;
       setSelectedFarm(farm);
@@ -97,10 +86,11 @@ export default function LoginPage() {
       setStep(2);
    }
 
-   // ─── Executa o login ────────────────────────────────────────────────────
-   // POST /api/auth/login — retorna accessToken, refreshToken, role
-   async function handleLogin() {
-      if (!selectedFarm) return;
+   async function handleLogin(e: React.FormEvent) {
+      // Previne o reload padrão do form — essencial para SPA
+      e.preventDefault();
+
+      if (!selectedFarm || loginLoading) return;
       setLoginLoading(true);
       setLoginError("");
       try {
@@ -109,11 +99,10 @@ export default function LoginPage() {
             username: username.trim(),
             password,
          });
-         // Persiste tokens e redireciona
-         localStorage.setItem("accessToken", data.accessToken);
-         localStorage.setItem("refreshToken", data.refreshToken);
-         localStorage.setItem("role", data.role);
-         localStorage.setItem("farmId", selectedFarm.id);
+
+         // login() salva os tokens E busca /users/me antes de retornar
+         // Só então navegamos — evita a race condition com ProtectedRoute
+         await login(data.accessToken, data.refreshToken);
          navigate("/dashboard");
       } catch {
          setLoginError("Usuário ou senha incorretos.");
@@ -122,12 +111,6 @@ export default function LoginPage() {
       }
    }
 
-   // Submete com Enter no campo de senha
-   function handlePasswordKeyDown(e: React.KeyboardEvent) {
-      if (e.key === "Enter" && username && password) handleLogin();
-   }
-
-   // ─── Render ─────────────────────────────────────────────────────────────
    return (
       <Box
          sx={{
@@ -137,25 +120,16 @@ export default function LoginPage() {
             alignItems: "center",
             justifyContent: "center",
             px: 2,
-            // Padrão sutil de pontos — remete ao solo/plantio
             backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)",
             backgroundSize: "18px 18px",
          }}
       >
          <Box sx={{ width: "100%", maxWidth: 380 }}>
-            {/* ═══════════════════════════════════════════════════════════════
-                PASSO 1 — Seleção de fazenda
-            ═══════════════════════════════════════════════════════════════ */}
+            {/* ══ PASSO 1 — Seleção de fazenda ══ */}
             <Slide direction="right" in={step === 1} mountOnEnter unmountOnExit>
                <Box>
-                  {/* Logo + nome do app */}
                   <Box
-                     sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        mb: 5,
-                     }}
+                     sx={{ display: "flex", flexDirection: "column", alignItems: "center", mb: 5 }}
                   >
                      <Box
                         sx={{
@@ -190,7 +164,6 @@ export default function LoginPage() {
                      </Typography>
                   </Box>
 
-                  {/* Card de seleção */}
                   <Paper elevation={0} sx={{ borderRadius: 3, p: 3 }}>
                      <Typography
                         variant="caption"
@@ -206,14 +179,12 @@ export default function LoginPage() {
                         Selecione sua fazenda
                      </Typography>
 
-                     {/* ─── Dropdown ─── */}
                      <FormControl fullWidth sx={{ mb: 2 }}>
                         <InputLabel>Fazenda</InputLabel>
                         <Select
                            value={selectedFarmId}
                            label="Fazenda"
                            onChange={e => setSelectedFarmId(e.target.value)}
-                           // Mostra spinner enquanto carrega
                            startAdornment={
                               farmsLoading ? (
                                  <InputAdornment position="start">
@@ -231,7 +202,6 @@ export default function LoginPage() {
                         </Select>
                      </FormControl>
 
-                     {/* Erro ao carregar fazendas */}
                      {farmsError && (
                         <Box
                            sx={{
@@ -262,7 +232,6 @@ export default function LoginPage() {
                         fullWidth
                         variant="contained"
                         size="large"
-                        // Só habilita quando tem fazenda selecionada
                         disabled={!selectedFarmId || farmsLoading}
                         onClick={handleSelectFarm}
                         endIcon={<ArrowForwardIcon />}
@@ -273,12 +242,9 @@ export default function LoginPage() {
                </Box>
             </Slide>
 
-            {/* ═══════════════════════════════════════════════════════════════
-                PASSO 2 — Credenciais
-            ═══════════════════════════════════════════════════════════════ */}
+            {/* ══ PASSO 2 — Credenciais ══ */}
             <Slide direction="left" in={step === 2} mountOnEnter unmountOnExit>
                <Box>
-                  {/* Botão voltar */}
                   <Button
                      startIcon={<ArrowBackIcon />}
                      sx={{ color: "rgba(255,255,255,0.75)", mb: 3, pl: 0 }}
@@ -293,7 +259,7 @@ export default function LoginPage() {
                   </Button>
 
                   <Paper elevation={0} sx={{ borderRadius: 3, p: 3 }}>
-                     {/* Logo / iniciais da fazenda */}
+                     {/* Logo da fazenda */}
                      <Box
                         sx={{
                            display: "flex",
@@ -318,7 +284,6 @@ export default function LoginPage() {
                            }}
                         >
                            {selectedFarm?.logoUrl ? (
-                              // Se a fazenda tem logo, exibe a imagem
                               <Box
                                  component="img"
                                  src={selectedFarm.logoUrl}
@@ -326,7 +291,6 @@ export default function LoginPage() {
                                  sx={{ width: "100%", height: "100%", objectFit: "cover" }}
                               />
                            ) : (
-                              // Fallback: iniciais da fazenda
                               <Typography
                                  sx={{
                                     fontFamily: "'Playfair Display', serif",
@@ -347,82 +311,103 @@ export default function LoginPage() {
                         </Typography>
                      </Box>
 
-                     {/* Campos de login */}
-                     <TextField
-                        fullWidth
-                        label="Usuário"
-                        variant="outlined"
-                        autoComplete="username"
-                        value={username}
-                        onChange={e => setUsername(e.target.value)}
-                        sx={{ mb: 2 }}
-                     />
-
-                     <TextField
-                        fullWidth
-                        label="Senha"
-                        variant="outlined"
-                        type={showPassword ? "text" : "password"}
-                        autoComplete="current-password"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        onKeyDown={handlePasswordKeyDown}
-                        sx={{ mb: 1 }}
-                        slotProps={{
-                           input: {
-                              endAdornment: (
-                                 <InputAdornment position="end">
-                                    <IconButton onClick={() => setShowPassword(v => !v)} edge="end">
-                                       {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                                    </IconButton>
-                                 </InputAdornment>
-                              ),
-                           },
-                        }}
-                     />
-
-                     <Box sx={{ textAlign: "right", mb: 2.5 }}>
-                        <RouterLink
-                           to="/forgot-password"
-                           style={{
-                              fontSize: 14,
-                              color: "#1B4332",
-                              fontWeight: 600,
-                              textDecoration: "none",
-                           }}
-                        >
-                           Esqueceu a senha?
-                        </RouterLink>
-                     </Box>
-
-                     {/* Erro de login */}
-                     {loginError && (
-                        <Typography
-                           variant="caption"
-                           color="error"
-                           sx={{ display: "block", mb: 1.5, textAlign: "center" }}
-                        >
-                           {loginError}
-                        </Typography>
-                     )}
-
-                     <Button
-                        fullWidth
-                        variant="contained"
-                        size="large"
-                        disabled={!username || !password || loginLoading}
-                        onClick={handleLogin}
-                        startIcon={
-                           loginLoading ? (
-                              // Spinner substitui o ícone durante o loading
-                              <CircularProgress size={18} color="inherit" />
-                           ) : (
-                              <LoginIcon />
-                           )
-                        }
+                     {/*
+                      * <form> é essencial aqui por três motivos:
+                      * 1. Permite que gerenciadores de senha funcionem corretamente
+                      * 2. Permite submit com Enter sem gambiarras
+                      * 3. Evita o aviso do Chrome sobre password fora de form
+                      * noValidate desliga a validação nativa do browser (usamos a nossa)
+                      */}
+                     <Box
+                        component="form"
+                        onSubmit={handleLogin}
+                        noValidate
+                        sx={{ display: "flex", flexDirection: "column", gap: 2 }}
                      >
-                        {loginLoading ? "Entrando..." : "Entrar"}
-                     </Button>
+                        <TextField
+                           fullWidth
+                           label="Usuário"
+                           variant="outlined"
+                           autoComplete="username"
+                           value={username}
+                           onChange={e => setUsername(e.target.value)}
+                        />
+
+                        <TextField
+                           fullWidth
+                           label="Senha"
+                           variant="outlined"
+                           type={showPassword ? "text" : "password"}
+                           autoComplete="current-password"
+                           value={password}
+                           onChange={e => setPassword(e.target.value)}
+                           slotProps={{
+                              input: {
+                                 endAdornment: (
+                                    <InputAdornment position="end">
+                                       <IconButton
+                                          onClick={() => setShowPassword(v => !v)}
+                                          edge="end"
+                                       >
+                                          {showPassword ? (
+                                             <VisibilityOffIcon />
+                                          ) : (
+                                             <VisibilityIcon />
+                                          )}
+                                       </IconButton>
+                                    </InputAdornment>
+                                 ),
+                              },
+                           }}
+                        />
+
+                        <Box sx={{ textAlign: "right", mt: -1 }}>
+                           <Typography
+                              component="a"
+                              href="/forgot-password"
+                              sx={{
+                                 fontSize: 14,
+                                 color: "#1B4332",
+                                 fontWeight: 600,
+                                 textDecoration: "none",
+                                 cursor: "pointer",
+                              }}
+                           >
+                              Esqueceu a senha?
+                           </Typography>
+                        </Box>
+
+                        {loginError && (
+                           <Typography
+                              variant="caption"
+                              color="error"
+                              sx={{ textAlign: "center", mt: -1 }}
+                           >
+                              {loginError}
+                           </Typography>
+                        )}
+
+                        {/*
+                         * type="submit" faz o form responder ao Enter automaticamente
+                         * e ao clique — sem precisar de onKeyDown manual
+                         */}
+                        <Button
+                           type="submit"
+                           fullWidth
+                           variant="contained"
+                           size="large"
+                           disabled={!username || !password || loginLoading}
+                           startIcon={
+                              loginLoading ? (
+                                 <CircularProgress size={18} color="inherit" />
+                              ) : (
+                                 <LoginIcon />
+                              )
+                           }
+                        >
+                           {loginLoading ? "Entrando..." : "Entrar"}
+                        </Button>
+                     </Box>
                   </Paper>
                </Box>
             </Slide>

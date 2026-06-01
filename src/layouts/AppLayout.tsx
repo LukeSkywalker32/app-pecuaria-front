@@ -37,7 +37,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AdminFarmProvider, useAdminFarm } from "@/contexts/AdminFarmContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import type { UserRole } from "@/types/auth.types";
 
 const DRAWER_WIDTH = 240;

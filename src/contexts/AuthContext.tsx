@@ -1,33 +1,33 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, type ReactNode, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import type { AuthUser } from "@/types/auth.types";
 
-//formato do contexto
 interface AuthContextData {
    user: AuthUser | null;
    isLoading: boolean;
    isAuthenticated: boolean;
+   login: (accessToken: string, refreshToken: string) => Promise<void>;
    logout: () => void;
    refreshUser: () => Promise<void>;
 }
 
-// Cria contexto
-const AuthContext = createContext<AuthContextData>({
+export const AuthContext = createContext<AuthContextData>({
    user: null,
    isLoading: true,
    isAuthenticated: false,
+   login: async () => {},
    logout: () => {},
    refreshUser: async () => {},
 });
-// ---------- Provider -------------
+
 export function AuthProvider({ children }: { children: ReactNode }) {
    const navigate = useNavigate();
 
    const [user, setUser] = useState<AuthUser | null>(null);
    const [isLoading, setIsLoading] = useState(true);
 
-   // --- Busca dados do usuario logado ---
+   // Busca dados do usuário logado usando o token já no localStorage
    const fetchMe = useCallback(async () => {
       const token = localStorage.getItem("accessToken");
       if (!token) {
@@ -37,27 +37,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
          const { data } = await api.get<AuthUser>("/users/me");
          setUser(data);
-      } catch {
-         localStorage.clear();
-         setUser(null);
+      } catch (error: any) {
+         const status = error?.response?.status;
+         if (status === 401) {
+            localStorage.clear();
+            setUser(null);
+         }
+         // Outros erros (rede, 500) não derrubam a sessão
       } finally {
          setIsLoading(false);
       }
    }, []);
 
-   //--- Roda uma vez no mount para restaurar sessao existente
+   // Roda uma vez no mount para restaurar sessão existente
    useEffect(() => {
       fetchMe();
    }, [fetchMe]);
 
-   // --- Logout ---
+   // Chamado pela LoginPage após receber os tokens da API
+   // Salva os tokens E já busca o usuário — evita a race condition
+   const login = useCallback(async (accessToken: string, refreshToken: string) => {
+      localStorage.setItem("accessToken", accessToken);
+      localStorage.setItem("refreshToken", refreshToken);
+      try {
+         const { data } = await api.get<AuthUser>("/users/me");
+         setUser(data);
+      } catch {
+         localStorage.clear();
+         throw new Error("Não foi possível carregar os dados do usuário após o login.");
+      }
+   }, []);
+
    const logout = useCallback(() => {
-      localStorage.clear(); // remove accessToken, refreshToken, role, farmId
+      localStorage.clear();
       setUser(null);
       navigate("/login");
    }, [navigate]);
 
-   // Usado após o usuário editar o próprio perfil
    const refreshUser = useCallback(async () => {
       try {
          const { data } = await api.get<AuthUser>("/users/me");
@@ -73,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user,
             isLoading,
             isAuthenticated: !!user,
+            login,
             logout,
             refreshUser,
          }}
@@ -80,11 +97,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          {children}
       </AuthContext.Provider>
    );
-}
-
-// --- Hook de consumo ---
-export function useAuth() {
-   const ctx = useContext(AuthContext);
-   if (!ctx) throw new Error("useAuth deve ser usado dentro de <AuthProvider>");
-   return ctx;
 }

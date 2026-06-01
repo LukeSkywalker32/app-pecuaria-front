@@ -25,29 +25,9 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import AdminFarmWarning from "@/components/AdminFarmWarning";
+import { useAuth } from "@/contexts/useAuth";
 import api from "@/services/api";
-
-// ─── Aviso para admin sem fazenda selecionada ──────────────────────────────
-// Componente separado pois useAdminFarm só existe quando o AdminFarmProvider
-// está no contexto (apenas para admin). Evita chamada condicional de hook.
-function AdminFarmWarning() {
-   // Importação dinâmica para não quebrar quando não há provider
-   try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { useAdminFarm } = require("@/contexts/AdminFarmContext");
-      const { selectedFarm } = useAdminFarm();
-      if (selectedFarm) return null;
-      return (
-         <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 3 }}>
-            <strong>Nenhuma fazenda selecionada.</strong> Escolha uma fazenda na barra lateral para
-            visualizar os dados do dashboard.
-         </Alert>
-      );
-   } catch {
-      return null;
-   }
-}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
@@ -859,7 +839,7 @@ export default function DashboardPage() {
                   value={loading ? "—" : activeAnimals.length}
                   subtitle={`${data?.animals.filter(a => a.status === "dead").length ?? 0} mortos · ${data?.animals.filter(a => a.status === "sold").length ?? 0} vendidos`}
                   icon={<PetsIcon sx={{ fontSize: 22 }} />}
-                  color="#1b4333c9"
+                  color="#1B4332"
                   loading={loading}
                   onClick={() => navigate("/animals")}
                />
@@ -892,7 +872,7 @@ export default function DashboardPage() {
                   value={loading ? "—" : totalAlerts}
                   subtitle={`${data?.upcomingEstrus.length ?? 0} CIOs · ${data?.upcomingVaccinations.length ?? 0} vacinas · ${animaisSemBrinco.length} sem brinco`}
                   icon={<TrendingUpIcon sx={{ fontSize: 22 }} />}
-                  color={totalAlerts > 0 ? "#F59E0B" : "#1b4332c7"}
+                  color={totalAlerts > 0 ? "#F59E0B" : "#1B4332"}
                   loading={loading}
                   alert={totalAlerts > 0}
                />

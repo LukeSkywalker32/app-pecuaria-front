@@ -1,7 +1,7 @@
 import { Box, CircularProgress } from "@mui/material";
 import { Navigate, Outlet } from "react-router-dom";
 import type { UserRole } from "@/types/auth.types";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/useAuth";
 
 interface Props {
    // Se informado, apenas os roles listados passam — omitir = todos passam
