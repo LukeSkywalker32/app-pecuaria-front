@@ -1,5 +1,3 @@
-// src/pages/Estrus/EstrusPage.tsx
-
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import FavoriteIcon from "@mui/icons-material/Favorite";
