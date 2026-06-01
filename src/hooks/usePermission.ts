@@ -1,4 +1,4 @@
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 
 //Permissao por role
 //Usado para controlar visibilidade de botoes e ações
