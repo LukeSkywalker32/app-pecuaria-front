@@ -34,6 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          setIsLoading(false);
          return;
       }
+      // Garantir que o header esteja atualiazado antes da chamada
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       try {
          const { data } = await api.get<AuthUser>("/users/me");
          setUser(data);
@@ -41,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          const status = error?.response?.status;
          if (status === 401) {
             localStorage.clear();
+            delete api.defaults.headers.common["X-Farm-Id"];
             setUser(null);
          }
          // Outros erros (rede, 500) não derrubam a sessão
@@ -70,6 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
    const logout = useCallback(() => {
       localStorage.clear();
+      // Limpa headers injetados pelo AdminFarmContext
+      delete api.defaults.headers.common["Authorization"];
+      delete api.defaults.headers.common["X-Farm-Id"];
       setUser(null);
       navigate("/login");
    }, [navigate]);
