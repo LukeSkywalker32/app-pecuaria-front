@@ -647,7 +647,7 @@ function UltrasoundDialog({ open, pregnancy, onClose }: UltrasoundDialogProps) {
       // Seleciona automaticamente o próximo dias disponível
       const available = ([30, 60, 260] as const).find(d => !usedDays.includes(d));
       if (available) setDays(available);
-   }, [open, usedDays]);
+   }, [open]);
 
    async function handleSubmit() {
       setError("");
@@ -1168,12 +1168,13 @@ export default function PregnanciesPage() {
                   variant="outlined"
                   startIcon={<FilterListIcon />}
                   onClick={() => setShowFilters(v => !v)}
-                  sx={{ borderColor: "divider", color: "text.secondary" }}
+                  sx={{ borderColor: "divider", color: "text.secondary", padding: "16px" }}
                >
                   Filtros
                </Button>
                {can("edit_pregnancy") && (
                   <Button
+                     sx={{ padding: "16px" }}
                      variant="contained"
                      startIcon={<AddIcon />}
                      onClick={() => setNewPregnancyOpen(true)}
@@ -1191,7 +1192,7 @@ export default function PregnanciesPage() {
                value={loading ? "—" : records.length}
                subtitle="Todas as prenhezes"
                icon={<LocalHospitalIcon sx={{ fontSize: 22 }} />}
-               color="#1B4332"
+               color="#1b4332d3"
                loading={loading}
             />
             <SummaryCard
