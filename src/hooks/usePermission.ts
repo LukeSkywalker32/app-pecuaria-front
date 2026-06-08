@@ -107,5 +107,5 @@ export function usePermission() {
       const perms = ROLE_PERMISSIONS[user.role] ?? [];
       return perms.includes(permission);
    }
-   return { can };
+   return { can, hasPermission: can };
 }
