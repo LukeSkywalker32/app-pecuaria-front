@@ -1119,7 +1119,7 @@ export default function PregnanciesPage() {
    const totalFalhas = records.filter(r => r.currentStatus === "failed").length;
    const partosProximos = records.filter(r => {
       if (r.currentStatus !== "pregnant") return false;
-      const ultimaTentativa = r.attempts.findLast(a => a.attemptStatus !== "failed");
+      const ultimaTentativa = [...r.attempts].reverse().find(a => a.attemptStatus !== "failed");
       if (!ultimaTentativa) return false;
       const days = daysUntil(ultimaTentativa.estimatedBirthDate);
       return days >= 0 && days <= 30;
