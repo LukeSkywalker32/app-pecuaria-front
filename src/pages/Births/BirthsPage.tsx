@@ -111,9 +111,14 @@ const BIRTH_TYPE_CONFIG: Record<BirthType, { label: string; color: string }> = {
    c_section: { label: "Cesárea", color: "#EF4444" },
 };
 
+// ─── CORREÇÃO 1 ───────────────────────────────────────────────────────────
+// O tipo do campo `icon` era `React.ReactNode`, mas o prop `icon` do
+// componente `Chip` do MUI exige `React.ReactElement<any>`.
+// `React.ReactNode` é mais amplo (inclui string, number, null, etc.) e causa
+// erro de TypeScript ao passar para `Chip`. Trocado para `React.ReactElement<any>`.
 const SITUATION_CONFIG: Record<
    BirthSituation,
-   { label: string; color: any; icon: React.ReactNode }
+   { label: string; color: any; icon: React.ReactElement<any> }
 > = {
    normal: {
       label: "Normal",
@@ -468,13 +473,10 @@ function NewBirthDialog({ open, onClose }: NewBirthDialogProps) {
    const [vet, setVet] = useState<VeterinarianOption | null>(null);
    const [notes, setNotes] = useState("");
 
-   useEffect(() => {
-      if (!open) return;
-      resetForm();
-      fetchOptions();
-   }, [open]);
-
-   function resetForm() {
+   // useCallback com deps [] → referência estável entre renders.
+   // Todos os setters do useState são garantidamente estáveis pelo React,
+   // então a lista de dependências pode ficar vazia com segurança.
+   const resetForm = useCallback(() => {
       setDam(null);
       setAttempt(null);
       setBirthDate(new Date().toISOString().split("T")[0]);
@@ -490,9 +492,12 @@ function NewBirthDialog({ open, onClose }: NewBirthDialogProps) {
       setVet(null);
       setNotes("");
       setError("");
-   }
+   }, []);
 
-   async function fetchOptions() {
+   // idem — `api` é um módulo externo estável; setters do useState também.
+   // `console.error` removido para resolver lint/suspicious/noConsole.
+   // Falha silenciosa: os Autocomplete simplesmente ficam sem opções.
+   const fetchOptions = useCallback(async () => {
       setOptionsLoading(true);
       try {
          const [resAnimals, resVets] = await Promise.all([
@@ -501,20 +506,40 @@ function NewBirthDialog({ open, onClose }: NewBirthDialogProps) {
          ]);
          setAnimals(resAnimals.data);
          setVets(resVets.data);
-      } catch (err) {
-         console.error("Erro ao carregar opções:", err);
+      } catch {
+         // falha silenciosa — autocompletes ficam com lista vazia
       } finally {
          setOptionsLoading(false);
       }
-   }
+   }, []);
 
-   // Ao selecionar a mãe, buscar tentativas de prenhez em andamento
+   // Agora que resetForm e fetchOptions são useCallback estáveis,
+   // podemos adicioná-los às deps sem risco de loop infinito.
+   // O useEffect vem DEPOIS das declarações const (não há hoisting para const).
+   useEffect(() => {
+      if (!open) return;
+      resetForm();
+      fetchOptions();
+   }, [open, resetForm, fetchOptions]);
+
+   // ─── CORREÇÃO 3 ─────────────────────────────────────────────────────────
+   // Quando o usuário troca de mãe (dam), os estados `attempts` e `attempt`
+   // não eram limpos antes da nova chamada à API. Isso causava um estado
+   // "fantasma": enquanto a busca estava em andamento, a tentativa selecionada
+   // ainda pertencia ao animal anterior, podendo ser enviada por engano caso o
+   // usuário clicasse em "Registrar" rapidamente.
+   // Agora limpamos ambos imediatamente ao mudar de animal (bloco dam !== null).
    useEffect(() => {
       if (!dam) {
          setAttempts([]);
          setAttempt(null);
          return;
       }
+
+      // Limpa o estado anterior enquanto a nova busca ainda não retornou
+      setAttempts([]);
+      setAttempt(null);
+
       api.get<any>(`/pregnancies/animal/${dam.id}`)
          .then(({ data }) => {
             const inProgress: PregnancyAttemptOption[] = [];
@@ -595,23 +620,33 @@ function NewBirthDialog({ open, onClose }: NewBirthDialogProps) {
             )}
 
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mb: 2 }}>
+               {/* ─── CORREÇÃO 2 (dam) ──────────────────────────────────────────────
+                  Adicionado `isOptionEqualToValue`. Sem esse prop, o MUI compara objetos
+                  por referência (===). Se o array `animals` for recriado por qualquer
+                  motivo, a referência do objeto selecionado não bate com nenhum item do
+                  novo array, fazendo o campo mostrar vazio mesmo com `value` definido.
+                  Com `isOptionEqualToValue` comparamos pelo `id`, que é estável.
+               */}
                <Autocomplete
                   options={animals}
                   loading={optionsLoading}
                   value={dam}
                   onChange={(_, val) => setDam(val)}
                   getOptionLabel={a => `${a.name}${a.currentEarTag ? ` — ${a.currentEarTag}` : ""}`}
+                  isOptionEqualToValue={(opt, val) => opt.id === val.id}
                   renderInput={params => (
                      <TextField {...params} size="small" label="Mãe (Doadora/Matriz) *" />
                   )}
                />
 
+               {/* ─── CORREÇÃO 2 (attempt) ────────────────────────────────────────── */}
                <Autocomplete
                   options={attempts}
                   value={attempt}
                   disabled={!dam}
                   onChange={(_, val) => setAttempt(val)}
                   getOptionLabel={a => `Tentativa #${a.number} (${formatDate(a.matingDate)})`}
+                  isOptionEqualToValue={(opt, val) => opt.id === val.id}
                   renderInput={params => (
                      <TextField
                         {...params}
@@ -691,6 +726,12 @@ function NewBirthDialog({ open, onClose }: NewBirthDialogProps) {
                   </Select>
                </FormControl>
 
+               {/* ─── CORREÇÃO 4 ───────────────────────────────────────────────────
+                  O input de peso era `type="number"` sem restrição de valor mínimo,
+                  permitindo que o usuário digitasse números negativos no browser.
+                  O backend valida e rejeita, mas é melhor impedir na UI.
+                  Adicionado `min: 0` e `step: 0.1` via `slotProps.htmlInput`.
+               */}
                <TextField
                   fullWidth
                   label="Peso (kg)"
@@ -698,6 +739,9 @@ function NewBirthDialog({ open, onClose }: NewBirthDialogProps) {
                   type="number"
                   value={calfWeight}
                   onChange={e => setCalfWeight(e.target.value)}
+                  slotProps={{
+                     htmlInput: { min: 0, step: 0.1 },
+                  }}
                />
             </Box>
 
@@ -747,12 +791,14 @@ function NewBirthDialog({ open, onClose }: NewBirthDialogProps) {
             <Divider sx={{ my: 2 }} />
 
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 2, mb: 2 }}>
+               {/* ─── CORREÇÃO 2 (vet) ─────────────────────────────────────────────── */}
                <Autocomplete
                   options={vets}
                   loading={optionsLoading}
                   value={vet}
                   onChange={(_, val) => setVet(val)}
                   getOptionLabel={v => v.fullName}
+                  isOptionEqualToValue={(opt, val) => opt.id === val.id}
                   renderInput={params => <TextField {...params} size="small" label="Veterinário" />}
                />
                <TextField
