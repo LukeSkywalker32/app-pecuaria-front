@@ -14,8 +14,26 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import AnimalMovementHistory from "@/pages/Management/components/AnimalMovementHistory";
 import api from "@/services/api";
-import type { AnimalResponse } from "./AnimalsPage";
+
+// --- TIPOS ---
+export interface AnimalResponse {
+   id: string;
+   name: string;
+   chipId: string;
+   currentEarTag: string | null;
+   gender: "M" | "F";
+   birthDate: string;
+   breed: string;
+   category: string;
+   status: "active" | "dead" | "sold" | "quarantine" | "treatment";
+   pastureId: string | null;
+   pastureName: string | null;
+   weightKg: number | null;
+   ageInMonths: number;
+   createdAt: string;
+}
 
 function statusLabel(s: string) {
    return (
@@ -28,6 +46,7 @@ function statusLabel(s: string) {
       }[s] ?? s
    );
 }
+
 function statusColor(s: string): any {
    return (
       {
@@ -39,6 +58,7 @@ function statusColor(s: string): any {
       }[s] ?? "default"
    );
 }
+
 function formatDate(iso: string | null | undefined) {
    if (!iso) return "—";
    return new Date(iso).toLocaleDateString("pt-BR");
@@ -162,7 +182,7 @@ export default function AnimalDetailPage() {
                }}
             >
                {[
-                  { label: "Data de Nascimento", value: formatDate(animal.birthDate as any) },
+                  { label: "Data de Nascimento", value: formatDate(animal.birthDate) },
                   {
                      label: "Idade",
                      value:
@@ -170,7 +190,6 @@ export default function AnimalDetailPage() {
                            ? `${animal.ageInMonths} meses`
                            : `${Math.floor(animal.ageInMonths / 12)} anos`,
                   },
-                  // Peso substituiu Unidade Animal
                   {
                      label: "Peso",
                      value: animal.weightKg != null ? `${animal.weightKg} kg` : "Não informado",
@@ -180,7 +199,7 @@ export default function AnimalDetailPage() {
                      label: "Origem",
                      value: (animal as any).origin === "born" ? "Nascido na fazenda" : "Comprado",
                   },
-                  { label: "Cadastrado em", value: formatDate(animal.createdAt as any) },
+                  { label: "Cadastrado em", value: formatDate(animal.createdAt) },
                ].map(item => (
                   <Box key={item.label}>
                      <Typography
@@ -231,17 +250,63 @@ export default function AnimalDetailPage() {
             </Tabs>
 
             <Box sx={{ p: 2 }}>
-               {[0, 1, 2, 3, 4, 5, 6].map(i => (
-                  <TabPanel key={i} value={tab} index={i}>
-                     <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ textAlign: "center", py: 4 }}
-                     >
-                        Módulo em desenvolvimento — em breve disponível.
-                     </Typography>
-                  </TabPanel>
-               ))}
+               <TabPanel value={tab} index={0}>
+                  <Typography
+                     variant="body2"
+                     color="text.secondary"
+                     sx={{ textAlign: "center", py: 4 }}
+                  >
+                     Módulo em desenvolvimento — em breve disponível.
+                  </Typography>
+               </TabPanel>
+               <TabPanel value={tab} index={1}>
+                  <Typography
+                     variant="body2"
+                     color="text.secondary"
+                     sx={{ textAlign: "center", py: 4 }}
+                  >
+                     Módulo em desenvolvimento — em breve disponível.
+                  </Typography>
+               </TabPanel>
+               <TabPanel value={tab} index={2}>
+                  <Typography
+                     variant="body2"
+                     color="text.secondary"
+                     sx={{ textAlign: "center", py: 4 }}
+                  >
+                     Módulo em desenvolvimento — em breve disponível.
+                  </Typography>
+               </TabPanel>
+               <TabPanel value={tab} index={3}>
+                  <Typography
+                     variant="body2"
+                     color="text.secondary"
+                     sx={{ textAlign: "center", py: 4 }}
+                  >
+                     Módulo em desenvolvimento — em breve disponível.
+                  </Typography>
+               </TabPanel>
+               <TabPanel value={tab} index={4}>
+                  <Typography
+                     variant="body2"
+                     color="text.secondary"
+                     sx={{ textAlign: "center", py: 4 }}
+                  >
+                     Módulo em desenvolvimento — em breve disponível.
+                  </Typography>
+               </TabPanel>
+               <TabPanel value={tab} index={5}>
+                  <AnimalMovementHistory animalId={animal.id} />
+               </TabPanel>
+               <TabPanel value={tab} index={6}>
+                  <Typography
+                     variant="body2"
+                     color="text.secondary"
+                     sx={{ textAlign: "center", py: 4 }}
+                  >
+                     Módulo em desenvolvimento — em breve disponível.
+                  </Typography>
+               </TabPanel>
             </Box>
          </Paper>
       </Box>

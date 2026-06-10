@@ -189,7 +189,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
             deathTime: data.deathTime && data.deathTime !== "" ? data.deathTime : undefined,
             deathLocation: data.deathLocation.trim(),
             causeOfDeath: data.causeOfDeath.trim(),
-            severity: data.severity && data.severity !== "" ? data.severity : undefined,
+            severity: data.severity || undefined,
             necropsy: data.necropsy ?? false,
             disposal: data.disposal && data.disposal !== "" ? data.disposal.trim() : undefined,
             notes: data.notes && data.notes !== "" ? data.notes.trim() : undefined,
