@@ -28,6 +28,7 @@ import MoveBatchDialog from "./components/MoveBatchDialog";
 export interface ManagementResponse {
    id: string;
    animalId: string;
+   animalName: string;
    originPasture: string;
    destinationPasture: string;
    movementDate: string;
@@ -247,7 +248,7 @@ export default function ManagementPage() {
                                     </TableCell>
                                     <TableCell>
                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                          {management.animalId}
+                                          {management.animalName ?? management.animalId}
                                        </Typography>
                                     </TableCell>
                                     <TableCell>
@@ -311,7 +312,7 @@ export default function ManagementPage() {
                            >
                               <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {management.animalId}
+                                    {management.animalName ?? management.animalId}
                                  </Typography>
                                  <Typography variant="caption" color="text.secondary">
                                     {formatDateTime(management.movementDate)}
