@@ -17,6 +17,8 @@ import {
    Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
+import { useAdminFarm } from "@/contexts/AdminFarmContext";
+import { useAuth } from "@/contexts/useAuth";
 import { usePermission } from "@/hooks/usePermission";
 import api from "@/services/api";
 import MoveAnimalDialog from "./components/MoveAnimalDialog";
@@ -48,6 +50,8 @@ function formatDateTime(dateStr: string): string {
 // --- Componente Principal ---
 export default function ManagementPage() {
    const { can } = usePermission();
+   const { user } = useAuth();
+   const { selectedFarm } = useAdminFarm();
 
    const [managements, setManagements] = useState<ManagementResponse[]>([]);
    const [loading, setLoading] = useState(true);
@@ -58,6 +62,11 @@ export default function ManagementPage() {
    const [moveBatchDialogOpen, setMoveBatchDialogOpen] = useState(false);
 
    const fetchManagements = useCallback(async () => {
+      if (user?.role === "admin" && !selectedFarm) {
+         setManagements([]);
+         setLoading(false);
+         return;
+      }
       setLoading(true);
       setError("");
       try {
@@ -69,7 +78,7 @@ export default function ManagementPage() {
       } finally {
          setLoading(false);
       }
-   }, []);
+   }, [user?.role, selectedFarm]);
 
    useEffect(() => {
       fetchManagements();
