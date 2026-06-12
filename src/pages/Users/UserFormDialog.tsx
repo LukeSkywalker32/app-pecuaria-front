@@ -114,7 +114,7 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
          });
       }
       setSubmitError("");
-   }, [editingUser, open, reset]);
+   }, [open,editingUser, reset]);
 
    async function onSubmit(data: FormData) {
       setSubmitError("");
