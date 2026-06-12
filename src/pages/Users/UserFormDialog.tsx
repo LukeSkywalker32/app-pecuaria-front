@@ -22,9 +22,23 @@ import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { useAuth } from "@/contexts/useAuth";
 import api from "@/services/api";
-import type { UserResponse } from "../Users/UsersPage";
 
-// --- SCHEMA ZOD ---
+interface UserResponse {
+   id: string;
+   fullName: string;
+   username: string;
+   email: string;
+   phone: string | null;
+   role: string;
+   active: boolean;
+   farmName: string;
+   crmv: string | null;
+   graduationDate: string | null;
+   specialties: string[] | null;
+   lastLogin: string | null;
+   createdAt: string;
+}
+
 const schema = z.object({
    fullName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
    username: z.string().min(3, "Username deve ter pelo menos 3 caracteres"),
@@ -75,9 +89,7 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
 
    const selectedRole = watch("role");
 
-   // Popula campos quando editingUser muda
    useEffect(() => {
-      if (!open) return;
       if (editingUser) {
          reset({
             fullName: editingUser.fullName,
@@ -115,7 +127,6 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
             role: data.role,
          };
 
-         // Se for criação, exige senha
          if (!editingUser) {
             if (!data.password) {
                setSubmitError("Senha é obrigatória para novo usuário");
@@ -124,7 +135,6 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
             payload.password = data.password;
          }
 
-         // Se for veterinário, adiciona campos opcionais
          if (data.role === "veterinarian") {
             payload.crmv = data.crmv?.trim() || null;
             payload.graduationDate = data.graduationDate || null;
@@ -143,11 +153,12 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
       }
    }
 
-   // Determina quais roles o usuário pode criar/editar
    const availableRoles =
       authUser?.role === "admin"
          ? ["admin", "owner", "farmmanager", "veterinarian"]
-         : ["veterinarian"]; // Owner só pode criar veterinários
+         : authUser?.role === "owner"
+           ? ["farmmanager", "veterinarian"]
+           : ["veterinarian"];
 
    return (
       <Dialog open={open} onClose={() => onClose(false)} maxWidth="sm" fullWidth>
@@ -165,7 +176,6 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
                   </Alert>
                )}
 
-               {/* ── Dados Básicos ── */}
                <Typography
                   variant="caption"
                   sx={{
@@ -217,7 +227,6 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
                   />
                </Box>
 
-               {/* ── Role ── */}
                <Typography
                   variant="caption"
                   sx={{
@@ -258,7 +267,6 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
                   />
                </Box>
 
-               {/* ── Senha ── */}
                {!editingUser && (
                   <>
                      <Typography
@@ -287,7 +295,6 @@ export default function UserFormDialog({ open, onClose, editingUser }: Props) {
                   </>
                )}
 
-               {/* ── Campos de Veterinário ── */}
                {selectedRole === "veterinarian" && (
                   <>
                      <Typography
