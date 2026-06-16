@@ -20,6 +20,7 @@ import {
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
+import ImageUploader from "@/components/ImageUploader";
 import api from "@/services/api";
 
 // ─── Tipos auxiliares ─────────────────────────────────────────────────────
@@ -461,14 +462,20 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
                </Typography>
 
                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 1, mb: 1 }}>
-                  <TextField
-                     label="URL da Foto"
-                     size="small"
-                     type="url"
-                     placeholder="https://..."
-                     error={!!errors.photoUrl}
-                     helperText={errors.photoUrl?.message ?? "Opcional — comprovante"}
-                     {...register("photoUrl")}
+                  <Controller
+                     name="photoUrl"
+                     control={control}
+                     render={({ field }) => (
+                        <ImageUploader
+                           value={field.value || null}
+                           onChange={url => field.onChange(url ?? "")}
+                           folder="vaccinations"
+                           label="Foto da Vacinação"
+                           helperText={errors.photoUrl?.message ?? "Opcional — comprovante"}
+                           disabled={isSubmitting}
+                           maxSizeMB={5}
+                        />
+                     )}
                   />
                   <Controller
                      name="veterinarianId"

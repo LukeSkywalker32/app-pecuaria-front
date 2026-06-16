@@ -22,6 +22,7 @@ import {
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
+import ImageUploader from "@/components/ImageUploader";
 import api from "@/services/api";
 
 // ─── Tipos auxiliares ─────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ const schema = z
          .max(500, "Notas devem ter no máximo 500 caracteres")
          .optional()
          .or(z.literal("")),
+      photoUrl: z.string().optional().or(z.literal("")),
    })
    .refine(
       data => {
@@ -130,6 +132,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
          necropsy: false,
          disposal: "",
          notes: "",
+         photoUrl: "",
       },
    });
 
@@ -162,6 +165,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
             necropsy: mortality.necropsy,
             disposal: mortality.disposal ?? "",
             notes: mortality.notes ?? "",
+            photoUrl: mortality.photos?.[0] ?? "",
          });
       } else if (open && !mortality) {
          reset({
@@ -174,6 +178,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
             necropsy: false,
             disposal: "",
             notes: "",
+            photoUrl: "",
          });
       }
       setSubmitError("");
@@ -193,6 +198,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
             necropsy: data.necropsy ?? false,
             disposal: data.disposal && data.disposal !== "" ? data.disposal.trim() : undefined,
             notes: data.notes && data.notes !== "" ? data.notes.trim() : undefined,
+            photos: data.photoUrl && data.photoUrl !== "" ? [data.photoUrl.trim()] : undefined,
          };
 
          if (isEditing) {
@@ -399,6 +405,23 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
                   Destinação e Observações
                </Typography>
 
+               <Box sx={{ mt: 1, mb: 2 }}>
+                  <Controller
+                     name="photoUrl"
+                     control={control}
+                     render={({ field }) => (
+                        <ImageUploader
+                           value={field.value || null}
+                           onChange={url => field.onChange(url ?? "")}
+                           folder="mortalities"
+                           label="Foto da Mortalidade"
+                           helperText="Opcional — evidência fotográfica"
+                           disabled={isSubmitting}
+                           maxSizeMB={5}
+                        />
+                     )}
+                  />
+               </Box>
                <Box sx={{ mt: 1, mb: 2 }}>
                   <TextField
                      fullWidth

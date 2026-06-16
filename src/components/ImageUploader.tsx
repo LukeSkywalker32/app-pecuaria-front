@@ -28,7 +28,7 @@ import {
    Tooltip,
    Typography,
 } from "@mui/material";
-import { useCallback, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, useCallback, useRef, useState } from "react";
 import api from "@/services/api";
 
 // -------Tipos -----
@@ -119,13 +119,13 @@ export default function ImageUploader({
       [folder, maxSizeMB, onChange],
    );
    // ── Handlers de input e drag & drop ───────
-   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+   function handleInputChange(e: ChangeEvent<HTMLInputElement>) {
       const file = e.target.files?.[0];
       if (file) handleFile(file);
       //Reseta o input para permitir selecionar o mesmo arquivo novamente
       if (inputRef.current) inputRef.current.value = "";
    }
-   function handleDrop(e: React.DragEvent) {
+   function handleDrop(e: DragEvent<HTMLDivElement>) {
       e.preventDefault();
       setIsDragOver(false);
       if (disabled || uploading) return;
@@ -133,7 +133,7 @@ export default function ImageUploader({
       if (file) handleFile(file);
    }
 
-   function handleDragOver(e: React.DragEvent) {
+   function handleDragOver(e: DragEvent<HTMLDivElement>) {
       e.preventDefault();
       if (!disabled && !uploading) setIsDragOver(true);
    }
