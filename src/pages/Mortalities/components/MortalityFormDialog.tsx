@@ -1,4 +1,8 @@
+// src/pages/Mortalities/components/MortalityFormDialog.tsx
+
 import { zodResolver } from "@hookform/resolvers/zod";
+import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
    Alert,
    Box,
@@ -13,10 +17,12 @@ import {
    FormControl,
    FormControlLabel,
    FormHelperText,
+   IconButton,
    InputLabel,
    MenuItem,
    Select,
    TextField,
+   Tooltip,
    Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
@@ -26,6 +32,7 @@ import ImageUploader from "@/components/ImageUploader";
 import api from "@/services/api";
 
 // ─── Tipos auxiliares ─────────────────────────────────────────────────────
+
 interface Animal {
    id: string;
    name: string;
@@ -54,7 +61,6 @@ interface MortalityResponse {
    updatedAt: string;
 }
 
-// ─── Schema Zod ───────────────────────────────────────────────────────────
 const schema = z
    .object({
       animalId: z.string().min(1, "Selecione um animal"),
@@ -84,22 +90,23 @@ const schema = z
          .max(500, "Notas devem ter no máximo 500 caracteres")
          .optional()
          .or(z.literal("")),
-      photoUrl: z.string().optional().or(z.literal("")),
    })
    .refine(
       data => {
          if (!data.deathDate) return true;
          return new Date(data.deathDate) <= new Date();
       },
-      {
-         message: "Data da morte não pode ser futura",
-         path: ["deathDate"],
-      },
+      { message: "Data da morte não pode ser futura", path: ["deathDate"] },
    );
 
 type FormData = z.infer<typeof schema>;
 
+// ─── Constantes ───────────────────────────────────────────────────────────
+
+const MAX_PHOTOS = 10;
+
 // ─── Props ────────────────────────────────────────────────────────────────
+
 interface Props {
    open: boolean;
    mortality: MortalityResponse | null;
@@ -107,12 +114,21 @@ interface Props {
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────
+
 export default function MortalityFormDialog({ open, mortality, onClose }: Props) {
    const isEditing = !!mortality;
 
    const [animals, setAnimals] = useState<Animal[]>([]);
    const [animalsLoading, setAnimalsLoading] = useState(false);
    const [submitError, setSubmitError] = useState("");
+
+   // Lista de URLs das fotos — gerenciada fora do react-hook-form
+   // porque cada upload é assíncrono e independente.
+   const [photos, setPhotos] = useState<string[]>([]);
+
+   // Controla se o ImageUploader "vazio" está visível para adicionar mais fotos
+   // Só mostramos quando ainda há espaço (< MAX_PHOTOS)
+   const canAddMore = photos.length < MAX_PHOTOS;
 
    const {
       control,
@@ -132,15 +148,13 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
          necropsy: false,
          disposal: "",
          notes: "",
-         photoUrl: "",
       },
    });
 
-   // ── Carrega animais ao abrir ───────────────────────────────────────────
+   // ── Carrega animais ativos ao abrir ───────────────────────────────────
+
    useEffect(() => {
       if (!open) return;
-
-      // Animais ativos (não mortos nem vendidos)
       setAnimalsLoading(true);
       api.get<Animal[]>("/animals?status=active")
          .then(({ data }) => setAnimals(data))
@@ -149,15 +163,14 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
    }, [open]);
 
    // ── Preenche formulário no modo edição ───────────────────────────────
+
    useEffect(() => {
       if (open && mortality) {
-         const deathDateFormatted = mortality.deathDate
-            ? new Date(mortality.deathDate).toISOString().split("T")[0]
-            : "";
-
          reset({
             animalId: mortality.animalId,
-            deathDate: deathDateFormatted,
+            deathDate: mortality.deathDate
+               ? new Date(mortality.deathDate).toISOString().split("T")[0]
+               : "",
             deathTime: mortality.deathTime ?? "",
             deathLocation: mortality.deathLocation,
             causeOfDeath: mortality.causeOfDeath,
@@ -165,8 +178,9 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
             necropsy: mortality.necropsy,
             disposal: mortality.disposal ?? "",
             notes: mortality.notes ?? "",
-            photoUrl: mortality.photos?.[0] ?? "",
          });
+         // Carrega as fotos existentes no estado separado
+         setPhotos(mortality.photos ?? []);
       } else if (open && !mortality) {
          reset({
             animalId: "",
@@ -178,13 +192,34 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
             necropsy: false,
             disposal: "",
             notes: "",
-            photoUrl: "",
          });
+         setPhotos([]);
       }
       setSubmitError("");
    }, [open, mortality, reset]);
 
+   // ── Handlers de fotos ─────────────────────────────────────────────────
+
+   // Chamado pelo ImageUploader quando um upload é concluído com sucesso.
+   // Recebe a URL retornada pelo Cloudinary e acrescenta à lista.
+   function handlePhotoUploaded(url: string | null) {
+      if (!url) return;
+      setPhotos(prev => [...prev, url]);
+   }
+
+   // Remove uma foto da lista pelo índice.
+   // Em edição: a remoção é local (não persiste no servidor até o submit).
+   // Nota: o backend não tem endpoint de remoção individual de foto —
+   // o PUT de update não inclui `photos`, portanto a remoção visual
+   // aqui reflete o que será enviado no próximo addPhotos.
+   // Para edição, as fotos existentes são imutáveis no backend (append-only),
+   // mas podemos ocultar visualmente e não reenviar as removidas.
+   function handleRemovePhoto(index: number) {
+      setPhotos(prev => prev.filter((_, i) => i !== index));
+   }
+
    // ── Submit ────────────────────────────────────────────────────────────
+
    async function onSubmit(data: FormData) {
       setSubmitError("");
       try {
@@ -196,16 +231,30 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
             causeOfDeath: data.causeOfDeath.trim(),
             severity: data.severity || undefined,
             necropsy: data.necropsy ?? false,
-            disposal: data.disposal && data.disposal !== "" ? data.disposal.trim() : undefined,
-            notes: data.notes && data.notes !== "" ? data.notes.trim() : undefined,
-            photos: data.photoUrl && data.photoUrl !== "" ? [data.photoUrl.trim()] : undefined,
+            disposal: data.disposal?.trim() || undefined,
+            notes: data.notes?.trim() || undefined,
          };
 
          if (isEditing) {
+            // 1. Atualiza os campos textuais
             const { animalId, ...updatePayload } = payload;
             await api.put(`/mortalities/${mortality!.id}`, updatePayload);
+
+            // 2. Se há fotos novas além das que já existiam no banco, envia via addPhotos.
+            // Compara com as fotos originais para enviar apenas as novas.
+            const originalPhotos = mortality!.photos ?? [];
+            const newPhotos = photos.filter(url => !originalPhotos.includes(url));
+            if (newPhotos.length > 0) {
+               await api.patch(`/mortalities/${mortality!.id}/photos`, {
+                  photoUrls: newPhotos,
+               });
+            }
          } else {
-            await api.post("/mortalities", payload);
+            // No create, envia as fotos já acumuladas no array
+            await api.post("/mortalities", {
+               ...payload,
+               photos: photos.length > 0 ? photos : undefined,
+            });
          }
 
          onClose(true);
@@ -216,6 +265,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
    }
 
    // ─── Render ───────────────────────────────────────────────────────────
+
    return (
       <Dialog open={open} onClose={() => onClose(false)} maxWidth="sm" fullWidth>
          <DialogTitle sx={{ fontWeight: 700 }}>
@@ -392,7 +442,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
                   </Box>
                </Box>
 
-               {/* ── Destinação ── */}
+               {/* ── Destinação e Notas ── */}
                <Typography
                   variant="caption"
                   sx={{
@@ -405,23 +455,6 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
                   Destinação e Observações
                </Typography>
 
-               <Box sx={{ mt: 1, mb: 2 }}>
-                  <Controller
-                     name="photoUrl"
-                     control={control}
-                     render={({ field }) => (
-                        <ImageUploader
-                           value={field.value || null}
-                           onChange={url => field.onChange(url ?? "")}
-                           folder="mortalities"
-                           label="Foto da Mortalidade"
-                           helperText="Opcional — evidência fotográfica"
-                           disabled={isSubmitting}
-                           maxSizeMB={5}
-                        />
-                     )}
-                  />
-               </Box>
                <Box sx={{ mt: 1, mb: 2 }}>
                   <TextField
                      fullWidth
@@ -445,6 +478,138 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
                      {...register("notes")}
                   />
                </Box>
+
+               {/* ── Fotos ── */}
+               <Typography
+                  variant="caption"
+                  sx={{
+                     fontWeight: 700,
+                     color: "text.secondary",
+                     textTransform: "uppercase",
+                     letterSpacing: 0.8,
+                  }}
+               >
+                  Fotos ({photos.length}/{MAX_PHOTOS})
+               </Typography>
+
+               <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mb: 1 }}
+               >
+                  {isEditing
+                     ? "Novas fotos serão adicionadas ao registro. Fotos existentes não podem ser removidas."
+                     : "Adicione fotos do caso (necrópsia, local, etc.). JPEG, PNG ou WebP · Máx. 5MB por foto."}
+               </Typography>
+
+               {/* Grid de fotos já carregadas */}
+               {photos.length > 0 && (
+                  <Box
+                     sx={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: 1,
+                        mb: 1.5,
+                     }}
+                  >
+                     {photos.map((url, index) => {
+                        // Em modo edição, fotos originais do banco não podem ser removidas
+                        // (backend é append-only para photos). Novas fotos adicionadas
+                        // nesta sessão podem ser descartadas antes do submit.
+                        const isOriginal = isEditing && (mortality?.photos ?? []).includes(url);
+
+                        return (
+                           <Box
+                              key={url}
+                              sx={{
+                                 position: "relative",
+                                 borderRadius: 1.5,
+                                 overflow: "hidden",
+                                 border: "1px solid",
+                                 borderColor: "divider",
+                                 aspectRatio: "1",
+                              }}
+                           >
+                              <Box
+                                 component="img"
+                                 src={url}
+                                 alt={`Foto ${index + 1}`}
+                                 sx={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    display: "block",
+                                 }}
+                              />
+                              {/* Botão de remover — apenas para fotos novas em modo edição
+                                  ou qualquer foto em modo criação */}
+                              {!isOriginal && (
+                                 <Box
+                                    sx={{
+                                       position: "absolute",
+                                       top: 4,
+                                       right: 4,
+                                       bgcolor: "rgba(0,0,0,0.55)",
+                                       borderRadius: 1,
+                                    }}
+                                 >
+                                    <Tooltip title="Remover foto">
+                                       <IconButton
+                                          size="small"
+                                          onClick={() => handleRemovePhoto(index)}
+                                          sx={{ color: "white", p: 0.4 }}
+                                          disabled={isSubmitting}
+                                       >
+                                          <DeleteIcon sx={{ fontSize: 16 }} />
+                                       </IconButton>
+                                    </Tooltip>
+                                 </Box>
+                              )}
+                              {/* Badge "existente" para fotos do banco */}
+                              {isOriginal && (
+                                 <Box
+                                    sx={{
+                                       position: "absolute",
+                                       bottom: 0,
+                                       left: 0,
+                                       right: 0,
+                                       bgcolor: "rgba(0,0,0,0.45)",
+                                       py: 0.25,
+                                       textAlign: "center",
+                                    }}
+                                 >
+                                    <Typography
+                                       variant="caption"
+                                       sx={{ color: "white", fontSize: 10 }}
+                                    >
+                                       Salva
+                                    </Typography>
+                                 </Box>
+                              )}
+                           </Box>
+                        );
+                     })}
+                  </Box>
+               )}
+
+               {/* ImageUploader para adicionar nova foto — só aparece se ainda há espaço */}
+               {canAddMore && (
+                  <ImageUploader
+                     value={null}
+                     onChange={handlePhotoUploaded}
+                     folder="mortalities"
+                     label=""
+                     helperText={`${MAX_PHOTOS - photos.length} foto(s) restante(s)`}
+                     disabled={isSubmitting}
+                  />
+               )}
+
+               {/* Aviso quando o limite foi atingido */}
+               {!canAddMore && (
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                     Limite de {MAX_PHOTOS} fotos atingido.
+                  </Alert>
+               )}
             </DialogContent>
 
             <Divider />

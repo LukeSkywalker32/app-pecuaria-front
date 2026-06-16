@@ -24,6 +24,7 @@ import ImageUploader from "@/components/ImageUploader";
 import api from "@/services/api";
 
 // ─── Tipos auxiliares ─────────────────────────────────────────────────────
+
 interface Animal {
    id: string;
    name: string;
@@ -53,7 +54,6 @@ interface VaccinationResponse {
    veterinarianName: string | null;
 }
 
-// ─── Schema Zod ───────────────────────────────────────────────────────────
 const schema = z
    .object({
       animalId: z.string().min(1, "Selecione um animal"),
@@ -72,7 +72,6 @@ const schema = z
       vaccinationDate: z.string().min(1, "Data de vacinação é obrigatória"),
       expirationDate: z.string().min(1, "Data de validade é obrigatória"),
       nextDoseDate: z.string().optional().or(z.literal("")),
-      photoUrl: z.string().optional().or(z.literal("")),
       reaction: z
          .string()
          .max(300, "Descrição da reação deve ter no máximo 300 caracteres")
@@ -120,6 +119,7 @@ const schema = z
 type FormData = z.infer<typeof schema>;
 
 // ─── Props ────────────────────────────────────────────────────────────────
+
 interface Props {
    open: boolean;
    vaccination: VaccinationResponse | null;
@@ -127,6 +127,7 @@ interface Props {
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────
+
 export default function VaccinationFormDialog({ open, vaccination, onClose }: Props) {
    const isEditing = !!vaccination;
 
@@ -135,6 +136,10 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
    const [animalsLoading, setAnimalsLoading] = useState(false);
    const [veterinariansLoading, setVeterinariansLoading] = useState(false);
    const [submitError, setSubmitError] = useState("");
+
+   // photoUrl é controlado fora do react-hook-form porque o upload
+   // é assíncrono — o ImageUploader chama onChange(url) após concluir.
+   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
    const {
       control,
@@ -152,7 +157,6 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
          vaccinationDate: "",
          expirationDate: "",
          nextDoseDate: "",
-         photoUrl: "",
          reaction: "",
          notes: "",
          veterinarianId: "",
@@ -160,17 +164,16 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
    });
 
    // ── Carrega animais e veterinários ao abrir ───────────────────────────
+
    useEffect(() => {
       if (!open) return;
 
-      // Animais ativos
       setAnimalsLoading(true);
       api.get<Animal[]>("/animals?status=active")
          .then(({ data }) => setAnimals(data))
          .catch(() => setAnimals([]))
          .finally(() => setAnimalsLoading(false));
 
-      // Veterinários (usuários da fazenda)
       setVeterinariansLoading(true);
       api.get<User[]>("/users")
          .then(({ data }) => setVeterinarians(data))
@@ -179,31 +182,29 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
    }, [open]);
 
    // ── Preenche formulário no modo edição ───────────────────────────────
+
    useEffect(() => {
       if (open && vaccination) {
-         const vaccinationDateFormatted = vaccination.vaccinationDate
-            ? new Date(vaccination.vaccinationDate).toISOString().split("T")[0]
-            : "";
-         const expirationDateFormatted = vaccination.expirationDate
-            ? new Date(vaccination.expirationDate).toISOString().split("T")[0]
-            : "";
-         const nextDoseDateFormatted = vaccination.nextDoseDate
-            ? new Date(vaccination.nextDoseDate).toISOString().split("T")[0]
-            : "";
-
          reset({
             animalId: vaccination.animalId,
             vaccineType: vaccination.vaccineType,
             brand: vaccination.brand,
             batch: vaccination.batch,
-            vaccinationDate: vaccinationDateFormatted,
-            expirationDate: expirationDateFormatted,
-            nextDoseDate: nextDoseDateFormatted,
-            photoUrl: vaccination.photoUrl ?? "",
+            vaccinationDate: vaccination.vaccinationDate
+               ? new Date(vaccination.vaccinationDate).toISOString().split("T")[0]
+               : "",
+            expirationDate: vaccination.expirationDate
+               ? new Date(vaccination.expirationDate).toISOString().split("T")[0]
+               : "",
+            nextDoseDate: vaccination.nextDoseDate
+               ? new Date(vaccination.nextDoseDate).toISOString().split("T")[0]
+               : "",
             reaction: vaccination.reaction ?? "",
             notes: vaccination.notes ?? "",
             veterinarianId: vaccination.veterinarianId ?? "",
          });
+         // Restaura a foto existente no estado separado
+         setPhotoUrl(vaccination.photoUrl ?? null);
       } else if (open && !vaccination) {
          reset({
             animalId: "",
@@ -213,16 +214,17 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
             vaccinationDate: "",
             expirationDate: "",
             nextDoseDate: "",
-            photoUrl: "",
             reaction: "",
             notes: "",
             veterinarianId: "",
          });
+         setPhotoUrl(null);
       }
       setSubmitError("");
    }, [open, vaccination, reset]);
 
    // ── Submit ────────────────────────────────────────────────────────────
+
    async function onSubmit(data: FormData) {
       setSubmitError("");
       try {
@@ -234,7 +236,8 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
             vaccinationDate: data.vaccinationDate,
             expirationDate: data.expirationDate,
             nextDoseDate: data.nextDoseDate && data.nextDoseDate !== "" ? data.nextDoseDate : null,
-            photoUrl: data.photoUrl && data.photoUrl !== "" ? data.photoUrl.trim() : null,
+            // photoUrl vem do estado separado — foi definido pelo ImageUploader
+            photoUrl: photoUrl ?? null,
             reaction: data.reaction && data.reaction !== "" ? data.reaction.trim() : null,
             notes: data.notes && data.notes !== "" ? data.notes.trim() : null,
             veterinarianId:
@@ -256,6 +259,7 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
    }
 
    // ─── Render ───────────────────────────────────────────────────────────
+
    return (
       <Dialog open={open} onClose={() => onClose(false)} maxWidth="sm" fullWidth>
          <DialogTitle sx={{ fontWeight: 700 }}>
@@ -390,9 +394,7 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
                      label="Data de Validade *"
                      size="small"
                      type="date"
-                     slotProps={{
-                        inputLabel: { shrink: true },
-                     }}
+                     slotProps={{ inputLabel: { shrink: true } }}
                      error={!!errors.expirationDate}
                      helperText={errors.expirationDate?.message}
                      {...register("expirationDate")}
@@ -401,9 +403,7 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
                      label="Data da Próxima Dose"
                      size="small"
                      type="date"
-                     slotProps={{
-                        inputLabel: { shrink: true },
-                     }}
+                     slotProps={{ inputLabel: { shrink: true } }}
                      error={!!errors.nextDoseDate}
                      helperText={
                         errors.nextDoseDate?.message ?? "Opcional — reforço ou dose adicional"
@@ -448,7 +448,7 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
                   />
                </Box>
 
-               {/* ── Foto e Veterinário ── */}
+               {/* ── Documentação ── */}
                <Typography
                   variant="caption"
                   sx={{
@@ -461,22 +461,17 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
                   Documentação
                </Typography>
 
-               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 1, mb: 1 }}>
-                  <Controller
-                     name="photoUrl"
-                     control={control}
-                     render={({ field }) => (
-                        <ImageUploader
-                           value={field.value || null}
-                           onChange={url => field.onChange(url ?? "")}
-                           folder="vaccinations"
-                           label="Foto da Vacinação"
-                           helperText={errors.photoUrl?.message ?? "Opcional — comprovante"}
-                           disabled={isSubmitting}
-                           maxSizeMB={5}
-                        />
-                     )}
+               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 1 }}>
+                  <ImageUploader
+                     value={photoUrl}
+                     onChange={setPhotoUrl}
+                     folder="vaccinations"
+                     label="Comprovante de Vacinação"
+                     helperText="Foto do cartão de vacinação ou comprovante (JPEG, PNG ou WebP · Máx. 5MB)"
+                     disabled={isSubmitting}
                   />
+
+                  {/* Veterinário responsável */}
                   <Controller
                      name="veterinarianId"
                      control={control}
