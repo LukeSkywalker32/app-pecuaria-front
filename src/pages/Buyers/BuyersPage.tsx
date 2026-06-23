@@ -26,10 +26,11 @@ import {
    Tooltip,
    Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { usePermission } from "@/hooks/usePermission";
+import api from "@/services/api";
 
 //-------- Tipo de comprador --------
 export interface Buyer {
@@ -60,20 +61,7 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-// ─── Cadastro temporário em localStorage ─────────────────────────
-// TODO: migrar para /api/buyers quando o backend tiver o módulo pronto
-
-const STORAGE_KEY = "pecuaria:buyers";
-function loadBuyers(): Buyer[] {
-   try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-   } catch {
-      return [];
-   }
-}
-function saveBuyers(list: Buyer[]) {
-   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
+// ─── Integração com API ─────────────────────────
 
 // ─── Dialog de formulário ─────────────────────────────────────────────────
 function BuyerFormDialog({
@@ -179,16 +167,30 @@ function BuyerFormDialog({
 // Página Principal
 export default function BuyersPage() {
    const { can } = usePermission();
-   const [buyers, setBuyers] = useState<Buyer[]>(loadBuyers);
+   const [buyers, setBuyers] = useState<Buyer[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState("");
    const [search, setSearch] = useState("");
    const [formOpen, setFormOpen] = useState(false);
    const [editing, setEditing] = useState<Buyer | null>(null);
    const [deleteTarget, setDeleteTarget] = useState<Buyer | null>(null);
 
-   // Persiste sempre que a lista muda
+   const fetchBuyers = useCallback(async () => {
+      try {
+         setLoading(true);
+         const response = await api.get("/buyers");
+         setBuyers(response.data);
+         setError("");
+      } catch (err: any) {
+         setError("Erro ao carregar compradores.");
+      } finally {
+         setLoading(false);
+      }
+   }, []);
+
    useEffect(() => {
-      saveBuyers(buyers);
-   }, [buyers]);
+      fetchBuyers();
+   }, [fetchBuyers]);
 
    const filtered = buyers.filter(
       b =>
@@ -196,31 +198,30 @@ export default function BuyersPage() {
          b.document.includes(search) ||
          b.city.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
    );
-   function handleFormClose(saved: boolean, data?: FormData) {
+   async function handleFormClose(saved: boolean, data?: FormData) {
       setFormOpen(false);
       if (!saved || !data) return;
-      if (editing) {
-         // Editar Existente
-         setBuyers(prev => prev.map(b => (b.id === editing.id ? { ...b, ...data } : b)));
-      } else {
-         // Criar novo com ID local
-         const novo: Buyer = {
-            id: `buyer-${Date.now()}`,
-            name: data.name,
-            document: data.document ?? "",
-            phone: data.phone ?? "",
-            email: data.email ?? "",
-            city: data.city ?? "",
-            notes: data.notes ?? "",
-            createdAt: new Date().toISOString(),
-         };
-         setBuyers(prev => [...prev, novo]);
+      try {
+         if (editing) {
+            await api.put(`/buyers/${editing.id}`, data);
+         } else {
+            await api.post("/buyers", data);
+         }
+         fetchBuyers();
+      } catch (err: any) {
+         alert(err?.response?.data?.error ?? "Erro ao salvar comprador.");
       }
       setEditing(null);
    }
-   function handleDelete() {
+
+   async function handleDelete() {
       if (!deleteTarget) return;
-      setBuyers(prev => prev.filter(b => b.id !== deleteTarget.id));
+      try {
+         await api.delete(`/buyers/${deleteTarget.id}`);
+         fetchBuyers();
+      } catch (err: any) {
+         alert(err?.response?.data?.error ?? "Erro ao excluir comprador.");
+      }
       setDeleteTarget(null);
    }
    return (
@@ -255,11 +256,11 @@ export default function BuyersPage() {
             )}
          </Box>
 
-         {/* ── Aviso de armazenamento local ── */}
-         <Alert severity="warning" sx={{ mb: 2 }}>
-            Os compradores estão armazenados localmente neste dispositivo. A integração com o
-            servidor será ativada em breve.
-         </Alert>
+         {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+               {error}
+            </Alert>
+         )}
 
          {/* ── Busca ── */}
          <Paper

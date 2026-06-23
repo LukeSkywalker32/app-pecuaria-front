@@ -19,16 +19,6 @@ import type { Buyer } from "@/pages/Buyers/BuyersPage";
 import api from "@/services/api";
 import type { AnimalResponse } from "../AnimalsPage";
 
-const STORAGE_KEY = "pecuaria:buyers";
-
-function loadBuyers(): Buyer[] {
-   try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-   } catch {
-      return [];
-   }
-}
-
 interface Props {
    open: boolean;
    animal: AnimalResponse | null;
@@ -45,8 +35,16 @@ export default function SellAnimalDialog({ open, animal, onClose }: Props) {
    const [error, setError] = useState("");
 
    useEffect(() => {
+      async function fetchBuyers() {
+         try {
+            const response = await api.get("/buyers");
+            setBuyers(response.data);
+         } catch (err) {
+            console.error("Erro ao carregar compradores:", err);
+         }
+      }
       if (open) {
-         setBuyers(loadBuyers());
+         fetchBuyers();
          setSelectedBuyer(null);
          setSaleDate(new Date().toISOString().split("T")[0]);
          setNotes("");
@@ -59,12 +57,10 @@ export default function SellAnimalDialog({ open, animal, onClose }: Props) {
       setLoading(true);
       setError("");
       try {
-         // Atualiza status do animal para "sold"
-         // TODO: quando o backend tiver campo buyerId, incluir aqui:
-         // await api.put(`/animals/${animal.id}`, { status: "sold", buyerId: selectedBuyer?.id });
          await api.put(`/animals/${animal.id}`, {
             status: "sold",
-            // notes: `Vendido para: ${selectedBuyer?.name ?? "não informado"}. ${notes}`.trim(),
+            buyerId: selectedBuyer?.id,
+            notes: notes.trim() || undefined,
          });
          onClose(true);
       } catch (err: any) {
