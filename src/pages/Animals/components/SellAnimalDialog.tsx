@@ -60,7 +60,8 @@ export default function SellAnimalDialog({ open, animal, onClose }: Props) {
          await api.put(`/animals/${animal.id}`, {
             status: "sold",
             buyerId: selectedBuyer?.id,
-            notes: notes.trim() || undefined,
+            saleDate,
+            saleNotes: notes.trim() || undefined,
          });
          onClose(true);
       } catch (err: any) {
