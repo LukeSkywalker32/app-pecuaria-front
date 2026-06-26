@@ -35,6 +35,7 @@ import api from "@/services/api";
 interface ImageUploaderProps {
    value?: string | null; // URL atual (pode vir do banco)
    onChange: (url: string | null) => void; // chamado com a nova URL ou null para limpar
+   onUploadingChange?: (uploading: boolean) => void; // avisa o pai quando o upload começa/termina
    folder?: string; // pasta no Cloudinary (ex: "vaccinations", "mortalities")
    label?: string; // texto do label exibido acima do componente
    helperText?: string; // texto de ajuda abaixo do componente
@@ -52,6 +53,7 @@ const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"] as const;
 export default function ImageUploader({
    value,
    onChange,
+   onUploadingChange,
    folder = "app-pecuaria",
    label = "Foto",
    helperText,
@@ -82,6 +84,7 @@ export default function ImageUploader({
          }
 
          setUploading(true);
+         onUploadingChange?.(true);
          setProgress(10); // feedback visual do upload
 
          try {
@@ -107,16 +110,18 @@ export default function ImageUploader({
             setTimeout(() => {
                setProgress(0);
                setUploading(false);
+               onUploadingChange?.(false);
                onChange(data.url);
             }, 400);
          } catch (err: any) {
             setProgress(0);
             setUploading(false);
+            onUploadingChange?.(false);
             const msg = err?.response?.data?.error ?? "Erro ao fazer upload. Tente novamente.";
             setError(msg);
          }
       },
-      [folder, maxSizeMB, onChange],
+      [folder, maxSizeMB, onChange, onUploadingChange],
    );
    // ── Handlers de input e drag & drop ───────
    function handleInputChange(e: ChangeEvent<HTMLInputElement>) {
@@ -327,7 +332,7 @@ export default function ImageUploader({
                   </Typography>
                   {!disabled && (
                      <Typography variant="caption" color="text.secondary">
-                        {ALLOWED_EXTENSIONS} · Máx. {maxSizeMB}MB
+                        {ALLOWED_EXTENSIONS.join(", ")} · Máx. {maxSizeMB}MB
                      </Typography>
                   )}
                </Box>

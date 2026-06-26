@@ -140,6 +140,9 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
    // photoUrl é controlado fora do react-hook-form porque o upload
    // é assíncrono — o ImageUploader chama onChange(url) após concluir.
    const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+   // Rastreia se o ImageUploader está no meio de um upload, pra travar
+   // o botão de salvar e evitar registrar o formulário sem a foto.
+   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
    const {
       control,
@@ -205,6 +208,7 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
          });
          // Restaura a foto existente no estado separado
          setPhotoUrl(vaccination.photoUrl ?? null);
+         setIsUploadingPhoto(false);
       } else if (open && !vaccination) {
          reset({
             animalId: "",
@@ -219,6 +223,7 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
             veterinarianId: "",
          });
          setPhotoUrl(null);
+         setIsUploadingPhoto(false);
       }
       setSubmitError("");
    }, [open, vaccination, reset]);
@@ -465,6 +470,7 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
                   <ImageUploader
                      value={photoUrl}
                      onChange={setPhotoUrl}
+                     onUploadingChange={setIsUploadingPhoto}
                      folder="vaccinations"
                      label="Comprovante de Vacinação"
                      helperText="Foto do cartão de vacinação ou comprovante (JPEG, PNG ou WebP · Máx. 5MB)"
@@ -513,10 +519,16 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
                <Button
                   type="submit"
                   variant="contained"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isUploadingPhoto}
                   startIcon={isSubmitting ? <CircularProgress size={16} /> : undefined}
                >
-                  {isSubmitting ? "Salvando..." : isEditing ? "Atualizar" : "Registrar"}
+                  {isSubmitting
+                     ? "Salvando..."
+                     : isUploadingPhoto
+                       ? "Aguarde o upload..."
+                       : isEditing
+                         ? "Atualizar"
+                         : "Registrar"}
                </Button>
             </DialogActions>
          </form>

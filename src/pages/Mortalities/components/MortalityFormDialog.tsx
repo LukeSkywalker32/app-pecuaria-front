@@ -126,6 +126,13 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
    // porque cada upload é assíncrono e independente.
    const [photos, setPhotos] = useState<string[]>([]);
 
+   // Rastreia se o ImageUploader está no meio de um upload, pra travar
+   // o botão de salvar e evitar registrar o formulário sem a foto.
+   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+   // URL da foto original (já salva no banco) que está sendo removida agora,
+   // pra desabilitar o botão específico e mostrar um spinner nela.
+   const [removingPhotoUrl, setRemovingPhotoUrl] = useState<string | null>(null);
+
    // Controla se o ImageUploader "vazio" está visível para adicionar mais fotos
    // Só mostramos quando ainda há espaço (< MAX_PHOTOS)
    const canAddMore = photos.length < MAX_PHOTOS;
@@ -181,6 +188,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
          });
          // Carrega as fotos existentes no estado separado
          setPhotos(mortality.photos ?? []);
+         setIsUploadingPhoto(false);
       } else if (open && !mortality) {
          reset({
             animalId: "",
@@ -194,6 +202,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
             notes: "",
          });
          setPhotos([]);
+         setIsUploadingPhoto(false);
       }
       setSubmitError("");
    }, [open, mortality, reset]);
@@ -208,14 +217,29 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
    }
 
    // Remove uma foto da lista pelo índice.
-   // Em edição: a remoção é local (não persiste no servidor até o submit).
-   // Nota: o backend não tem endpoint de remoção individual de foto —
-   // o PUT de update não inclui `photos`, portanto a remoção visual
-   // aqui reflete o que será enviado no próximo addPhotos.
-   // Para edição, as fotos existentes são imutáveis no backend (append-only),
-   // mas podemos ocultar visualmente e não reenviar as removidas.
-   function handleRemovePhoto(index: number) {
+   // Remove uma foto NOVA (adicionada nesta sessão, ainda não persistida).
+   // Como ela nunca foi enviada ao backend, basta tirar do array local.
+   function handleRemoveNewPhoto(index: number) {
       setPhotos(prev => prev.filter((_, i) => i !== index));
+   }
+
+   // Remove uma foto ORIGINAL (já salva no banco) chamando o endpoint real
+   // de remoção. Só depois da confirmação do backend é que tiramos do estado local.
+   async function handleRemoveOriginalPhoto(url: string) {
+      if (!mortality) return;
+      setRemovingPhotoUrl(url);
+      setSubmitError("");
+      try {
+         await api.delete(`/mortalities/${mortality.id}/photos`, {
+            data: { photoUrl: url },
+         });
+         setPhotos(prev => prev.filter(u => u !== url));
+      } catch (err: any) {
+         const msg = err?.response?.data?.error ?? "Erro ao remover foto. Tente novamente.";
+         setSubmitError(msg);
+      } finally {
+         setRemovingPhotoUrl(null);
+      }
    }
 
    // ── Submit ────────────────────────────────────────────────────────────
@@ -498,7 +522,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
                   sx={{ display: "block", mb: 1 }}
                >
                   {isEditing
-                     ? "Novas fotos serão adicionadas ao registro. Fotos existentes não podem ser removidas."
+                     ? "Adicione novas fotos ou remova as existentes — a remoção é imediata."
                      : "Adicione fotos do caso (necrópsia, local, etc.). JPEG, PNG ou WebP · Máx. 5MB por foto."}
                </Typography>
 
@@ -541,31 +565,37 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
                                     display: "block",
                                  }}
                               />
-                              {/* Botão de remover — apenas para fotos novas em modo edição
-                                  ou qualquer foto em modo criação */}
-                              {!isOriginal && (
-                                 <Box
-                                    sx={{
-                                       position: "absolute",
-                                       top: 4,
-                                       right: 4,
-                                       bgcolor: "rgba(0,0,0,0.55)",
-                                       borderRadius: 1,
-                                    }}
-                                 >
-                                    <Tooltip title="Remover foto">
-                                       <IconButton
-                                          size="small"
-                                          onClick={() => handleRemovePhoto(index)}
-                                          sx={{ color: "white", p: 0.4 }}
-                                          disabled={isSubmitting}
-                                       >
+                              {/* Botão de remover — fotos novas removem só localmente,
+                                  fotos originais chamam a API de remoção real */}
+                              <Box
+                                 sx={{
+                                    position: "absolute",
+                                    top: 4,
+                                    right: 4,
+                                    bgcolor: "rgba(0,0,0,0.55)",
+                                    borderRadius: 1,
+                                 }}
+                              >
+                                 <Tooltip title="Remover foto">
+                                    <IconButton
+                                       size="small"
+                                       onClick={() =>
+                                          isOriginal
+                                             ? handleRemoveOriginalPhoto(url)
+                                             : handleRemoveNewPhoto(index)
+                                       }
+                                       sx={{ color: "white", p: 0.4 }}
+                                       disabled={isSubmitting || removingPhotoUrl === url}
+                                    >
+                                       {removingPhotoUrl === url ? (
+                                          <CircularProgress size={14} sx={{ color: "white" }} />
+                                       ) : (
                                           <DeleteIcon sx={{ fontSize: 16 }} />
-                                       </IconButton>
-                                    </Tooltip>
-                                 </Box>
-                              )}
-                              {/* Badge "existente" para fotos do banco */}
+                                       )}
+                                    </IconButton>
+                                 </Tooltip>
+                              </Box>
+                              {/* Badge "salva" para fotos do banco, só informativo agora */}
                               {isOriginal && (
                                  <Box
                                     sx={{
@@ -597,6 +627,7 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
                   <ImageUploader
                      value={null}
                      onChange={handlePhotoUploaded}
+                     onUploadingChange={setIsUploadingPhoto}
                      folder="mortalities"
                      label=""
                      helperText={`${MAX_PHOTOS - photos.length} foto(s) restante(s)`}
@@ -619,10 +650,16 @@ export default function MortalityFormDialog({ open, mortality, onClose }: Props)
                <Button
                   type="submit"
                   variant="contained"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isUploadingPhoto}
                   startIcon={isSubmitting ? <CircularProgress size={20} /> : undefined}
                >
-                  {isSubmitting ? "Salvando..." : isEditing ? "Atualizar" : "Registrar"}
+                  {isSubmitting
+                     ? "Salvando..."
+                     : isUploadingPhoto
+                       ? "Aguarde o upload..."
+                       : isEditing
+                         ? "Atualizar"
+                         : "Registrar"}
                </Button>
             </DialogActions>
          </form>
