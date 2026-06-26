@@ -1,7 +1,6 @@
 // src/pages/Mortalities/components/MortalityFormDialog.tsx
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import DeleteIcon from "@mui/icons-material/Delete";
 import {
    Alert,
