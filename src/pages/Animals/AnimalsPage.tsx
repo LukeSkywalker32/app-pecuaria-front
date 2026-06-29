@@ -50,6 +50,7 @@ export interface AnimalResponse {
    breed: string;
    gender: "M" | "F";
    birthDate: string;
+   origin: "born" | "purchased";
    ageInMonths: number;
    category: string;
    // Peso em kg — null quando não informado

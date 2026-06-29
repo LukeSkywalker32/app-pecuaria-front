@@ -57,12 +57,13 @@ export interface Pasture {
 
 // --------- DIALOG DE FORMULARIO ------------
 
-interface PastureFormDialogProps {
+export interface PastureFormDialogProps {
    open: boolean;
    pasture: Pasture | null;
    onClose: (saved: boolean) => void;
+   defaultType?: PastureType;
 }
-function PastureFormDialog({ open, pasture, onClose }: PastureFormDialogProps) {
+export function PastureFormDialog({ open, pasture, onClose, defaultType }: PastureFormDialogProps) {
    const isEditing = !!pasture;
    const [name, setName] = useState("");
    const [hectares, setHectares] = useState("");
@@ -81,12 +82,12 @@ function PastureFormDialog({ open, pasture, onClose }: PastureFormDialogProps) {
          } else {
             setName("");
             setHectares("");
-            setType("native");
+            setType(defaultType ?? "native");
             setAnimalCapacity("");
          }
          setError("");
       }
-   }, [open, pasture, isEditing]);
+   }, [open, pasture, isEditing, defaultType]);
 
    async function handleSubmit() {
       //Validações

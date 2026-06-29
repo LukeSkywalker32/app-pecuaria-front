@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import api from "@/services/api";
+import { PastureFormDialog } from "../../Pasture/PasturesPage";
 import type { AnimalResponse } from "../AnimalsPage";
 
 // ─── Tipos auxiliares ─────────────────────────────────────────────────────
@@ -87,6 +88,8 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
    const [pasturesLoading, setPasturesLoading] = useState(false);
    const [breedsLoading, setBreedsLoading] = useState(false);
    const [submitError, setSubmitError] = useState("");
+   // Dialogo (empilhado) pra criar o pasto de quarentena sem fechar este formulario
+   const [createPastureOpen, setCreatePastureOpen] = useState(false);
 
    const {
       control,
@@ -94,6 +97,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
       handleSubmit,
       watch,
       reset,
+      setValue,
       formState: { errors, isSubmitting },
    } = useForm<FormData>({
       resolver: zodResolver(schema),
@@ -112,17 +116,32 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
    });
 
    const originValue = watch("origin");
+   const pastureIdValue = watch("pastureId");
+   // Pasto de quarentena já cadastrado e ativo na fazenda, se existir
+   const quarantinePasture = pastures.find(p => p.type === "quarantine") ?? null;
+
+   // Busca os pastos ativos da fazenda — extraído em função pra poder
+   // recarregar depois de criar um novo pasto de quarentena sem fechar o diálogo.
+   function loadPastures() {
+      setPasturesLoading(true);
+      return api
+         .get<Pasture[]>("/pastures?active=true")
+         .then(({ data }) => {
+            setPastures(data);
+            return data;
+         })
+         .catch(() => {
+            setPastures([]);
+            return [] as Pasture[];
+         })
+         .finally(() => setPasturesLoading(false));
+   }
 
    // ── Carrega pastos e raças ao abrir ───────────────────────────────────
    useEffect(() => {
       if (!open) return;
 
-      // Pastos ativos
-      setPasturesLoading(true);
-      api.get<Pasture[]>("/pastures?active=true")
-         .then(({ data }) => setPastures(data))
-         .catch(() => setPastures([]))
-         .finally(() => setPasturesLoading(false));
+      loadPastures();
 
       // Raças ativas (ordenadas por nome — já vêm ordenadas da API)
       setBreedsLoading(true);
@@ -131,6 +150,26 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
          .catch(() => setBreeds([]))
          .finally(() => setBreedsLoading(false));
    }, [open]);
+
+   // Quando o usuário marca a origem como "Comprado" e existe um pasto de
+   // quarentena cadastrado, vincula automaticamente — sem sobrescrever se o
+   // usuário já tiver escolhido outro pasto manualmente.
+   async function handleOriginChange(value: "born" | "purchased") {
+      if (value === "purchased" && !pastureIdValue) {
+         const current =
+            quarantinePasture ?? (await loadPastures()).find(p => p.type === "quarantine");
+         if (current) setValue("pastureId", current.id);
+      }
+   }
+
+   // Chamado ao fechar o diálogo (empilhado) de criação do pasto de quarentena
+   async function handlePastureCreated(saved: boolean) {
+      setCreatePastureOpen(false);
+      if (!saved) return;
+      const updated = await loadPastures();
+      const created = updated.find(p => p.type === "quarantine");
+      if (created) setValue("pastureId", created.id);
+   }
 
    // ── Preenche formulário no modo edição ───────────────────────────────
    useEffect(() => {
@@ -146,7 +185,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
             breed: animal.breed,
             gender: animal.gender,
             birthDate: birthDateFormatted,
-            origin: (animal as any).origin ?? "born",
+            origin: animal.origin ?? "born",
             pastureId: animal.pastureId ?? "",
             status: (["active", "quarantine", "treatment", "dead", "sold"].includes(animal.status)
                ? animal.status
@@ -369,7 +408,14 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      render={({ field }) => (
                         <FormControl size="small" disabled={isEditing}>
                            <InputLabel>Origem *</InputLabel>
-                           <Select {...field} label="Origem *">
+                           <Select
+                              {...field}
+                              label="Origem *"
+                              onChange={e => {
+                                 field.onChange(e);
+                                 handleOriginChange(e.target.value as "born" | "purchased");
+                              }}
+                           >
                               <MenuItem value="born">Nascido na fazenda</MenuItem>
                               <MenuItem value="purchased">Comprado</MenuItem>
                            </Select>
@@ -416,12 +462,42 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                   />
                </Box>
 
-               {originValue === "purchased" && (
-                  <Alert severity="info" sx={{ mt: 1 }}>
-                     Animais comprados sem pasto são automaticamente registrados com status{" "}
-                     <strong>Quarentena</strong>.
-                  </Alert>
+               {originValue === "purchased" && !pasturesLoading && (
+                  <>
+                     {quarantinePasture && pastureIdValue === quarantinePasture.id && (
+                        <Alert severity="success" sx={{ mt: 1 }}>
+                           Vinculado automaticamente ao pasto de quarentena{" "}
+                           <strong>{quarantinePasture.name}</strong>. Status será definido como{" "}
+                           <strong>Quarentena</strong>.
+                        </Alert>
+                     )}
+                     {!quarantinePasture && (
+                        <Alert
+                           severity="warning"
+                           sx={{ mt: 1 }}
+                           action={
+                              <Button
+                                 color="inherit"
+                                 size="small"
+                                 onClick={() => setCreatePastureOpen(true)}
+                              >
+                                 Criar pasto de quarentena
+                              </Button>
+                           }
+                        >
+                           Nenhum pasto de quarentena cadastrado nesta fazenda. Crie um agora ou
+                           selecione outro pasto existente acima.
+                        </Alert>
+                     )}
+                  </>
                )}
+
+               <PastureFormDialog
+                  open={createPastureOpen}
+                  pasture={null}
+                  defaultType="quarantine"
+                  onClose={handlePastureCreated}
+               />
 
                {/* ── Status ── */}
                <Box sx={{ mt: 2 }}>

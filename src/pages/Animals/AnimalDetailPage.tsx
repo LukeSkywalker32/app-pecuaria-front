@@ -25,6 +25,7 @@ export interface AnimalResponse {
    currentEarTag: string | null;
    gender: "M" | "F";
    birthDate: string;
+   origin: "born" | "purchased";
    breed: string;
    category: string;
    status: "active" | "dead" | "sold" | "quarantine" | "treatment";
@@ -197,7 +198,7 @@ export default function AnimalDetailPage() {
                   { label: "Pasto Atual", value: animal.pastureName ?? "Sem pasto" },
                   {
                      label: "Origem",
-                     value: (animal as any).origin === "born" ? "Nascido na fazenda" : "Comprado",
+                     value: animal.origin === "born" ? "Nascido na fazenda" : "Comprado",
                   },
                   { label: "Cadastrado em", value: formatDate(animal.createdAt) },
                ].map(item => (
