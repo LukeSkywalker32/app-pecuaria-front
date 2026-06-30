@@ -18,7 +18,7 @@ import {
    TextField,
    Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import api from "@/services/api";
@@ -122,20 +122,19 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
 
    // Busca os pastos ativos da fazenda — extraído em função pra poder
    // recarregar depois de criar um novo pasto de quarentena sem fechar o diálogo.
-   function loadPastures() {
+   const loadPastures = useCallback(async () => {
       setPasturesLoading(true);
-      return api
-         .get<Pasture[]>("/pastures?active=true")
-         .then(({ data }) => {
-            setPastures(data);
-            return data;
-         })
-         .catch(() => {
-            setPastures([]);
-            return [] as Pasture[];
-         })
-         .finally(() => setPasturesLoading(false));
-   }
+      try {
+         const { data } = await api.get<Pasture[]>("/pastures?active=true");
+         setPastures(data);
+         return data;
+      } catch {
+         setPastures([]);
+         return [] as Pasture[];
+      } finally {
+         setPasturesLoading(false);
+      }
+   }, []);
 
    // ── Carrega pastos e raças ao abrir ───────────────────────────────────
    useEffect(() => {
@@ -149,7 +148,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
          .then(({ data }) => setBreeds(data))
          .catch(() => setBreeds([]))
          .finally(() => setBreedsLoading(false));
-   }, [open]);
+   }, [open, loadPastures]);
 
    // Quando o usuário marca a origem como "Comprado" e existe um pasto de
    // quarentena cadastrado, vincula automaticamente — sem sobrescrever se o
@@ -225,6 +224,16 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
 
          if (isEditing) {
             const { chipId, origin, ...updatePayload } = payload;
+
+            // Se o status remove o animal do pasto (vendido ou morto),
+            // não enviar pastureId para evitar conflito no backend entre
+            // campo escalar e operação de relação (pasture.disconnect)
+            const statusExitsPasture =
+               updatePayload.status === "sold" || updatePayload.status === "dead";
+            if (statusExitsPasture) {
+               delete updatePayload.pastureId;
+            }
+
             await api.put(`/animals/${animal!.id}`, updatePayload);
          } else {
             await api.post("/animals", payload);
