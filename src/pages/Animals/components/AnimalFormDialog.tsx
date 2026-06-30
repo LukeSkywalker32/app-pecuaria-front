@@ -18,7 +18,7 @@ import {
    TextField,
    Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import api from "@/services/api";
@@ -122,19 +122,20 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
 
    // Busca os pastos ativos da fazenda — extraído em função pra poder
    // recarregar depois de criar um novo pasto de quarentena sem fechar o diálogo.
-   const loadPastures = useCallback(async () => {
+   function loadPastures() {
       setPasturesLoading(true);
-      try {
-         const { data } = await api.get<Pasture[]>("/pastures?active=true");
-         setPastures(data);
-         return data;
-      } catch {
-         setPastures([]);
-         return [] as Pasture[];
-      } finally {
-         setPasturesLoading(false);
-      }
-   }, []);
+      return api
+         .get<Pasture[]>("/pastures?active=true")
+         .then(({ data }) => {
+            setPastures(data);
+            return data;
+         })
+         .catch(() => {
+            setPastures([]);
+            return [] as Pasture[];
+         })
+         .finally(() => setPasturesLoading(false));
+   }
 
    // ── Carrega pastos e raças ao abrir ───────────────────────────────────
    useEffect(() => {
@@ -148,7 +149,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
          .then(({ data }) => setBreeds(data))
          .catch(() => setBreeds([]))
          .finally(() => setBreedsLoading(false));
-   }, [open, loadPastures]);
+   }, [open]);
 
    // Quando o usuário marca a origem como "Comprado" e existe um pasto de
    // quarentena cadastrado, vincula automaticamente — sem sobrescrever se o
@@ -223,7 +224,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
          };
 
          if (isEditing) {
-            const { chipId, origin, ...updatePayload } = payload;
+            const { chipId, origin, currentEarTag, ...updatePayload } = payload;
 
             // Se o status remove o animal do pasto (vendido ou morto),
             // não enviar pastureId para evitar conflito no backend entre
@@ -290,8 +291,14 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                   <TextField
                      label="Brinco"
                      size="small"
+                     disabled={isEditing}
                      error={!!errors.currentEarTag}
-                     helperText={errors.currentEarTag?.message ?? "Ex: BR-T001"}
+                     helperText={
+                        errors.currentEarTag?.message ??
+                        (isEditing
+                           ? "Para trocar o brinco, use o módulo de Brincos"
+                           : "Ex: BR-T001")
+                     }
                      {...register("currentEarTag")}
                   />
                </Box>
