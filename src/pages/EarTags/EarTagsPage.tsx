@@ -427,9 +427,20 @@ interface HistoryDialogProps {
    animalId: string | null;
    animalName: string | null;
    onClose: () => void;
+   canDelete: boolean;
+   onRequestDelete: (record: EarTagRecord) => void;
+   refreshKey: number;
 }
 
-function EarTagHistoryDialog({ open, animalId, animalName, onClose }: HistoryDialogProps) {
+function EarTagHistoryDialog({
+   open,
+   animalId,
+   animalName,
+   onClose,
+   canDelete,
+   onRequestDelete,
+   refreshKey,
+}: HistoryDialogProps) {
    const [records, setRecords] = useState<EarTagRecord[]>([]);
    const [loading, setLoading] = useState(false);
 
@@ -440,7 +451,7 @@ function EarTagHistoryDialog({ open, animalId, animalName, onClose }: HistoryDia
          .then(({ data }) => setRecords(data))
          .catch(() => setRecords([]))
          .finally(() => setLoading(false));
-   }, [open, animalId]);
+   }, [open, animalId, refreshKey]);
 
    return (
       <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -524,12 +535,25 @@ function EarTagHistoryDialog({ open, animalId, animalName, onClose }: HistoryDia
                                  )}
                               </Box>
                            </Box>
-                           <Chip
-                              label={r.isActive ? "Ativo" : "Removido"}
-                              color={r.isActive ? "success" : "default"}
-                              size="small"
-                              sx={{ fontSize: 11, height: 22 }}
-                           />
+                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Chip
+                                 label={r.isActive ? "Ativo" : "Removido"}
+                                 color={r.isActive ? "success" : "default"}
+                                 size="small"
+                                 sx={{ fontSize: 11, height: 22 }}
+                              />
+                              {canDelete && !r.isActive && (
+                                 <Tooltip title="Excluir este registro do histórico">
+                                    <IconButton
+                                       size="small"
+                                       onClick={() => onRequestDelete(r)}
+                                       sx={{ color: "error.main" }}
+                                    >
+                                       <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                 </Tooltip>
+                              )}
+                           </Box>
                         </Box>
                      </Box>
                   ))}
@@ -541,6 +565,54 @@ function EarTagHistoryDialog({ open, animalId, animalName, onClose }: HistoryDia
          </DialogActions>
       </Dialog>
    );
+}
+
+// ─── Agrupamento por Animal ────────────────────────────────────────────────
+// A tabela principal não deve listar uma linha por TROCA de brinco (isso
+// polui a visualização quando um animal trocou de brinco várias vezes).
+// Em vez disso, agrupamos por animal: mostramos o brinco ativo (ou o último
+// removido, se não houver ativo) e o número de trocas vai num badge que
+// abre o histórico completo daquele animal.
+
+interface GroupedAnimalRow {
+   animalId: string;
+   animalName: string | null;
+   current: EarTagRecord; // brinco ativo, ou o mais recente se nenhum ativo
+   totalRecords: number;
+   hasActive: boolean;
+}
+
+function groupByAnimal(records: EarTagRecord[]): GroupedAnimalRow[] {
+   const byAnimal = new Map<string, EarTagRecord[]>();
+   for (const r of records) {
+      const list = byAnimal.get(r.animalId) ?? [];
+      list.push(r);
+      byAnimal.set(r.animalId, list);
+   }
+
+   const groups: GroupedAnimalRow[] = [];
+   for (const [animalId, list] of byAnimal) {
+      // Ordena por placementDate desc para pegar o mais recente como fallback
+      const sorted = [...list].sort(
+         (a, b) => new Date(b.placementDate).getTime() - new Date(a.placementDate).getTime(),
+      );
+      const active = sorted.find(r => r.isActive);
+      const current = active ?? sorted[0];
+
+      groups.push({
+         animalId,
+         animalName: current.animalName,
+         current,
+         totalRecords: list.length,
+         hasActive: !!active,
+      });
+   }
+
+   // Ordena: animais com brinco ativo primeiro, depois por nome
+   return groups.sort((a, b) => {
+      if (a.hasActive !== b.hasActive) return a.hasActive ? -1 : 1;
+      return (a.animalName ?? "").localeCompare(b.animalName ?? "");
+   });
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────
@@ -565,6 +637,7 @@ export default function EarTagsPage() {
    const [historyAnimalId, setHistoryAnimalId] = useState<string | null>(null);
    const [historyAnimalName, setHistoryAnimalName] = useState<string | null>(null);
    const [historyOpen, setHistoryOpen] = useState(false);
+   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
    // ── Fetch ─────────────────────────────────────────────────────────────
    const fetchRecords = useCallback(async () => {
@@ -622,6 +695,7 @@ export default function EarTagsPage() {
          await api.delete(`/earTagHistory/${deleteTarget.id}`);
          setDeleteTarget(null);
          fetchRecords();
+         setHistoryRefreshKey(k => k + 1);
       } catch (err: any) {
          setError(err?.response?.data?.error ?? "Erro ao excluir registro.");
          setDeleteTarget(null);
@@ -630,9 +704,12 @@ export default function EarTagsPage() {
       }
    }
 
-   // ── Estatísticas rápidas ──────────────────────────────────────────────
-   const totalAtivos = records.filter(r => r.isActive).length;
-   const totalRemovidos = records.filter(r => !r.isActive).length;
+   // ── Agrupamento por animal ───────────────────────────────────────────
+   const groupedRows = groupByAnimal(records);
+
+   // ── Estatísticas rápidas (contam ANIMAIS, não registros de troca) ────
+   const totalAtivos = groupedRows.filter(g => g.hasActive).length;
+   const totalRemovidos = groupedRows.filter(g => !g.hasActive).length;
 
    // ─── Render ───────────────────────────────────────────────────────────
    return (
@@ -653,7 +730,8 @@ export default function EarTagsPage() {
                      Brincos
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                     {totalAtivos} ativos · {totalRemovidos} removidos
+                     {totalAtivos} {totalAtivos === 1 ? "animal" : "animais"} com brinco ativo ·{" "}
+                     {totalRemovidos} sem brinco
                   </Typography>
                </Box>
             </Box>
@@ -752,7 +830,7 @@ export default function EarTagsPage() {
                <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
                   <CircularProgress color="primary" />
                </Box>
-            ) : records.length === 0 ? (
+            ) : groupedRows.length === 0 ? (
                <Box sx={{ textAlign: "center", py: 8, color: "text.secondary" }}>
                   <LabelIcon sx={{ fontSize: 48, mb: 1, opacity: 0.3 }} />
                   <Typography variant="body1" sx={{ fontWeight: 600 }}>
@@ -774,7 +852,7 @@ export default function EarTagsPage() {
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
                            >
-                              BRINCO
+                              BRINCO ATUAL
                            </TableCell>
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
@@ -784,17 +862,12 @@ export default function EarTagsPage() {
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
                            >
-                              COLOCADO EM
+                              DESDE
                            </TableCell>
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
                            >
-                              REMOVIDO EM
-                           </TableCell>
-                           <TableCell
-                              sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
-                           >
-                              MOTIVO
+                              TROCAS
                            </TableCell>
                            <TableCell
                               sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
@@ -813,159 +886,125 @@ export default function EarTagsPage() {
                      </TableHead>
 
                      <TableBody>
-                        {records.map(record => (
-                           <TableRow
-                              key={record.id}
-                              hover
-                              sx={{
-                                 "&:last-child td": { border: 0 },
-                                 opacity: record.isActive ? 1 : 0.7,
-                              }}
-                           >
-                              {/* Brinco */}
-                              <TableCell>
-                                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                    {record.isActive ? (
-                                       <LabelIcon sx={{ fontSize: 16, color: "success.main" }} />
-                                    ) : (
-                                       <LabelOffIcon
-                                          sx={{ fontSize: 16, color: "text.disabled" }}
-                                       />
-                                    )}
-                                    <Typography
-                                       variant="body2"
-                                       sx={{
-                                          fontWeight: 700,
-                                          color: record.isActive
-                                             ? "primary.main"
-                                             : "text.secondary",
-                                       }}
-                                    >
-                                       {record.earTagNumber}
-                                    </Typography>
-                                 </Box>
-                              </TableCell>
-
-                              {/* Animal */}
-                              <TableCell>
-                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    {record.animalName ?? "—"}
-                                 </Typography>
-                                 {record.animalEarTag && record.isActive && (
-                                    <Typography variant="caption" color="text.secondary">
-                                       Brinco atual: {record.animalEarTag}
-                                    </Typography>
-                                 )}
-                              </TableCell>
-
-                              {/* Colocado em */}
-                              <TableCell>
-                                 <Typography variant="body2">
-                                    {formatDate(record.placementDate)}
-                                 </Typography>
-                              </TableCell>
-
-                              {/* Removido em */}
-                              <TableCell>
-                                 <Typography
-                                    variant="body2"
-                                    color={record.removalDate ? "text.primary" : "text.disabled"}
-                                 >
-                                    {formatDate(record.removalDate)}
-                                 </Typography>
-                              </TableCell>
-
-                              {/* Motivo */}
-                              <TableCell>
-                                 <Typography
-                                    variant="body2"
-                                    color={record.reason ? "text.primary" : "text.disabled"}
-                                    sx={{
-                                       maxWidth: 180,
-                                       overflow: "hidden",
-                                       textOverflow: "ellipsis",
-                                       whiteSpace: "nowrap",
-                                    }}
-                                 >
-                                    {record.reason ?? "—"}
-                                 </Typography>
-                              </TableCell>
-
-                              {/* Status */}
-                              <TableCell>
-                                 <Chip
-                                    label={record.isActive ? "Ativo" : "Removido"}
-                                    color={record.isActive ? "success" : "default"}
-                                    size="small"
-                                    sx={{ fontSize: 11, height: 22 }}
-                                 />
-                              </TableCell>
-
-                              {/* Ações */}
-                              {(can("remove_ear_tag") || can("delete_ear_tag_history")) && (
-                                 <TableCell align="right">
-                                    <Box
-                                       sx={{
-                                          display: "flex",
-                                          gap: 0.5,
-                                          justifyContent: "flex-end",
-                                       }}
-                                    >
-                                       {/* Histórico */}
-                                       <Tooltip title="Ver histórico do animal">
-                                          <IconButton
-                                             size="small"
-                                             onClick={() => handleOpenHistory(record)}
-                                             sx={{ color: "text.secondary" }}
-                                          >
-                                             <HistoryIcon fontSize="small" />
-                                          </IconButton>
-                                       </Tooltip>
-
-                                       {/* Remover brinco ativo */}
-                                       {can("remove_ear_tag") && record.isActive && (
-                                          <Tooltip title="Registrar remoção">
-                                             <IconButton
-                                                size="small"
-                                                onClick={() => setRemoveTarget(record)}
-                                                sx={{ color: "warning.main" }}
-                                             >
-                                                <RemoveCircleOutlineIcon fontSize="small" />
-                                             </IconButton>
-                                          </Tooltip>
+                        {groupedRows.map(group => {
+                           const record = group.current;
+                           return (
+                              <TableRow
+                                 key={group.animalId}
+                                 hover
+                                 sx={{
+                                    "&:last-child td": { border: 0 },
+                                    opacity: group.hasActive ? 1 : 0.7,
+                                 }}
+                              >
+                                 {/* Brinco atual */}
+                                 <TableCell>
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                       {group.hasActive ? (
+                                          <LabelIcon sx={{ fontSize: 16, color: "success.main" }} />
+                                       ) : (
+                                          <LabelOffIcon
+                                             sx={{ fontSize: 16, color: "text.disabled" }}
+                                          />
                                        )}
-
-                                       {/* Deletar registro (só removidos) */}
-                                       {can("delete_ear_tag_history") && !record.isActive && (
-                                          <Tooltip title="Excluir registro histórico">
-                                             <IconButton
-                                                size="small"
-                                                onClick={() => setDeleteTarget(record)}
-                                                sx={{ color: "error.main" }}
-                                             >
-                                                <DeleteIcon fontSize="small" />
-                                             </IconButton>
-                                          </Tooltip>
-                                       )}
-
-                                       {/* Tooltip explicativo para brincos ativos sem permissão de delete */}
-                                       {can("delete_ear_tag_history") && record.isActive && (
-                                          <Tooltip title="Remova o brinco antes de excluir o registro">
-                                             <span>
-                                                <IconButton size="small" disabled>
-                                                   <DeleteIcon
-                                                      fontSize="small"
-                                                      sx={{ color: "text.disabled" }}
-                                                   />
-                                                </IconButton>
-                                             </span>
-                                          </Tooltip>
-                                       )}
+                                       <Typography
+                                          variant="body2"
+                                          sx={{
+                                             fontWeight: 700,
+                                             color: group.hasActive
+                                                ? "primary.main"
+                                                : "text.secondary",
+                                          }}
+                                       >
+                                          {group.hasActive ? record.earTagNumber : "Sem brinco"}
+                                       </Typography>
                                     </Box>
                                  </TableCell>
-                              )}
-                           </TableRow>
-                        ))}
+
+                                 {/* Animal */}
+                                 <TableCell>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                       {group.animalName ?? "—"}
+                                    </Typography>
+                                 </TableCell>
+
+                                 {/* Desde (colocação do brinco atual, ou remoção do último) */}
+                                 <TableCell>
+                                    <Typography variant="body2">
+                                       {group.hasActive
+                                          ? formatDate(record.placementDate)
+                                          : formatDate(record.removalDate)}
+                                    </Typography>
+                                 </TableCell>
+
+                                 {/* Trocas — badge que abre o histórico completo */}
+                                 <TableCell>
+                                    <Tooltip title="Ver histórico completo de trocas">
+                                       <Chip
+                                          icon={<HistoryIcon sx={{ fontSize: 14 }} />}
+                                          label={`${group.totalRecords}x`}
+                                          size="small"
+                                          variant="outlined"
+                                          onClick={() => handleOpenHistory(record)}
+                                          sx={{
+                                             fontSize: 11,
+                                             height: 24,
+                                             cursor: "pointer",
+                                             borderColor: "divider",
+                                          }}
+                                       />
+                                    </Tooltip>
+                                 </TableCell>
+
+                                 {/* Status */}
+                                 <TableCell>
+                                    <Chip
+                                       label={group.hasActive ? "Ativo" : "Sem brinco"}
+                                       color={group.hasActive ? "success" : "default"}
+                                       size="small"
+                                       sx={{ fontSize: 11, height: 22 }}
+                                    />
+                                 </TableCell>
+
+                                 {/* Ações */}
+                                 {(can("remove_ear_tag") || can("delete_ear_tag_history")) && (
+                                    <TableCell align="right">
+                                       <Box
+                                          sx={{
+                                             display: "flex",
+                                             gap: 0.5,
+                                             justifyContent: "flex-end",
+                                          }}
+                                       >
+                                          {/* Histórico */}
+                                          <Tooltip title="Ver histórico do animal">
+                                             <IconButton
+                                                size="small"
+                                                onClick={() => handleOpenHistory(record)}
+                                                sx={{ color: "text.secondary" }}
+                                             >
+                                                <HistoryIcon fontSize="small" />
+                                             </IconButton>
+                                          </Tooltip>
+
+                                          {/* Remover brinco ativo */}
+                                          {can("remove_ear_tag") && group.hasActive && (
+                                             <Tooltip title="Registrar remoção">
+                                                <IconButton
+                                                   size="small"
+                                                   onClick={() => setRemoveTarget(record)}
+                                                   sx={{ color: "warning.main" }}
+                                                >
+                                                   <RemoveCircleOutlineIcon fontSize="small" />
+                                                </IconButton>
+                                             </Tooltip>
+                                          )}
+                                       </Box>
+                                    </TableCell>
+                                 )}
+                              </TableRow>
+                           );
+                        })}
                      </TableBody>
                   </Table>
                </TableContainer>
@@ -986,6 +1025,9 @@ export default function EarTagsPage() {
             animalId={historyAnimalId}
             animalName={historyAnimalName}
             onClose={() => setHistoryOpen(false)}
+            canDelete={can("delete_ear_tag_history")}
+            onRequestDelete={record => setDeleteTarget(record)}
+            refreshKey={historyRefreshKey}
          />
 
          {/* Dialog: Confirmar exclusão */}
