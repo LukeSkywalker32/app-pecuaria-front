@@ -109,12 +109,14 @@ function FarmLogoUploader({
          setUploading(true);
          setProgress(10);
 
+         let progressInterval: ReturnType<typeof setInterval> | undefined;
+
          try {
             const formData = new FormData();
             formData.append("logo", file); // Campo esperado pelo backend: 'logo'
 
             // Simula progresso
-            const progressInterval = setInterval(() => {
+            progressInterval = setInterval(() => {
                setProgress(prev => Math.min(prev + 15, 85));
             }, 300);
 
