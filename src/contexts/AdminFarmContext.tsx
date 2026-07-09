@@ -15,6 +15,7 @@ interface AdminFarmContextData {
    selectedFarm: Farm | null;
    selectFarm: (farm: Farm | null) => void;
    isLoading: boolean;
+   refetchFarms: () => Promise<void>;
 }
 
 // ─── Contexto ─────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ const AdminFarmContext = createContext<AdminFarmContextData>({
    selectedFarm: null,
    selectFarm: () => {},
    isLoading: false,
+   refetchFarms: async () => {},
 });
 
 // ─── Chave do localStorage ────────────────────────────────────────────────
@@ -80,9 +82,15 @@ export function AdminFarmProvider({ children }: { children: ReactNode }) {
       }
    }, []);
 
+   // Função para recarregar a lista de fazendas (usada após CRUD)
+   const refetchFarms = useCallback(async () => {
+      await fetchFarms();
+   }, [fetchFarms]);
 
    return (
-      <AdminFarmContext.Provider value={{ farms, selectedFarm, selectFarm, isLoading }}>
+      <AdminFarmContext.Provider
+         value={{ farms, selectedFarm, selectFarm, isLoading, refetchFarms }}
+      >
          {children}
       </AdminFarmContext.Provider>
    );
