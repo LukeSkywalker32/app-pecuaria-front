@@ -159,7 +159,7 @@ function FarmLogoUploader({
          <Typography
             variant="caption"
             sx={{
-               fontWeight: 700,
+               fontWeight: 700, y
                color: disabled ? "text.disabled" : "text.secondary",
                textTransform: "uppercase",
                letterSpacing: 0.8,

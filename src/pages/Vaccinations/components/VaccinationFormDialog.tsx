@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
    Alert,
    Box,
@@ -11,10 +12,12 @@ import {
    Divider,
    FormControl,
    FormHelperText,
+   IconButton,
    InputLabel,
    MenuItem,
    Select,
    TextField,
+   Tooltip,
    Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
@@ -47,7 +50,7 @@ interface VaccinationResponse {
    vaccinationDate: string;
    expirationDate: string;
    nextDoseDate: string | null;
-   photoUrl: string | null;
+   photos: string[] | null;
    reaction: string | null;
    notes: string | null;
    veterinarianId: string | null;
@@ -118,6 +121,10 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
+// ─── Constantes ───────────────────────────────────────────────────────────
+
+const MAX_PHOTOS = 3;
+
 // ─── Props ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -137,12 +144,19 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
    const [veterinariansLoading, setVeterinariansLoading] = useState(false);
    const [submitError, setSubmitError] = useState("");
 
-   // photoUrl é controlado fora do react-hook-form porque o upload
-   // é assíncrono — o ImageUploader chama onChange(url) após concluir.
-   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+   // Lista de URLs das fotos — gerenciada fora do react-hook-form
+   // porque cada upload é assíncrono e independente.
+   const [photos, setPhotos] = useState<string[]>([]);
    // Rastreia se o ImageUploader está no meio de um upload, pra travar
    // o botão de salvar e evitar registrar o formulário sem a foto.
    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+   // URL da foto original (já salva no banco) que está sendo removida agora,
+   // pra desabilitar o botão específico e mostrar um spinner nela.
+   const [removingPhotoUrl, setRemovingPhotoUrl] = useState<string | null>(null);
+
+   // Controla se o ImageUploader "vazio" está visível para adicionar mais fotos
+   // Só mostramos quando ainda há espaço (< MAX_PHOTOS)
+   const canAddMore = photos.length < MAX_PHOTOS;
 
    const {
       control,
@@ -206,8 +220,8 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
             notes: vaccination.notes ?? "",
             veterinarianId: vaccination.veterinarianId ?? "",
          });
-         // Restaura a foto existente no estado separado
-         setPhotoUrl(vaccination.photoUrl ?? null);
+         // Restaura as fotos existentes no estado separado
+         setPhotos(vaccination.photos ?? []);
          setIsUploadingPhoto(false);
       } else if (open && !vaccination) {
          reset({
@@ -222,11 +236,45 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
             notes: "",
             veterinarianId: "",
          });
-         setPhotoUrl(null);
+         setPhotos([]);
          setIsUploadingPhoto(false);
       }
       setSubmitError("");
    }, [open, vaccination, reset]);
+
+   // ── Handlers de fotos ─────────────────────────────────────────────────
+
+   // Chamado pelo ImageUploader quando um upload é concluído com sucesso.
+   // Recebe a URL retornada pelo Cloudinary e acrescenta à lista.
+   function handlePhotoUploaded(url: string | null) {
+      if (!url) return;
+      setPhotos(prev => [...prev, url]);
+   }
+
+   // Remove uma foto NOVA (adicionada nesta sessão, ainda não persistida).
+   // Como ela nunca foi enviada ao backend, basta tirar do array local.
+   function handleRemoveNewPhoto(index: number) {
+      setPhotos(prev => prev.filter((_, i) => i !== index));
+   }
+
+   // Remove uma foto ORIGINAL (já salva no banco) chamando o endpoint real
+   // de remoção. Só depois da confirmação do backend é que tiramos do estado local.
+   async function handleRemoveOriginalPhoto(url: string) {
+      if (!vaccination) return;
+      setRemovingPhotoUrl(url);
+      setSubmitError("");
+      try {
+         await api.delete(`/vaccinations/${vaccination.id}/photos`, {
+            data: { photoUrl: url },
+         });
+         setPhotos(prev => prev.filter(u => u !== url));
+      } catch (err: any) {
+         const msg = err?.response?.data?.error ?? "Erro ao remover foto. Tente novamente.";
+         setSubmitError(msg);
+      } finally {
+         setRemovingPhotoUrl(null);
+      }
+   }
 
    // ── Submit ────────────────────────────────────────────────────────────
 
@@ -241,8 +289,6 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
             vaccinationDate: data.vaccinationDate,
             expirationDate: data.expirationDate,
             nextDoseDate: data.nextDoseDate && data.nextDoseDate !== "" ? data.nextDoseDate : null,
-            // photoUrl vem do estado separado — foi definido pelo ImageUploader
-            photoUrl: photoUrl ?? null,
             reaction: data.reaction && data.reaction !== "" ? data.reaction.trim() : null,
             notes: data.notes && data.notes !== "" ? data.notes.trim() : null,
             veterinarianId:
@@ -250,10 +296,25 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
          };
 
          if (isEditing) {
+            // 1. Atualiza os campos textuais (sem fotos)
             const { animalId, ...updatePayload } = payload;
             await api.put(`/vaccinations/${vaccination!.id}`, updatePayload);
+
+            // 2. Se há fotos novas além das que já existiam no banco, envia via addPhotos.
+            // Compara com as fotos originais para enviar apenas as novas.
+            const originalPhotos = vaccination!.photos ?? [];
+            const newPhotos = photos.filter(url => !originalPhotos.includes(url));
+            if (newPhotos.length > 0) {
+               await api.patch(`/vaccinations/${vaccination!.id}/photos`, {
+                  photoUrls: newPhotos,
+               });
+            }
          } else {
-            await api.post("/vaccinations", payload);
+            // No create, envia as fotos já acumuladas no array
+            await api.post("/vaccinations", {
+               ...payload,
+               photos: photos.length > 0 ? photos : undefined,
+            });
          }
 
          onClose(true);
@@ -463,21 +524,151 @@ export default function VaccinationFormDialog({ open, vaccination, onClose }: Pr
                      letterSpacing: 0.8,
                   }}
                >
-                  Documentação
+                  Fotos ({photos.length}/{MAX_PHOTOS})
                </Typography>
 
-               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 1 }}>
+               <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mb: 1 }}
+               >
+                  {isEditing
+                     ? "Adicione novas fotos ou remova as existentes — a remoção é imediata."
+                     : "Foto do cartão de vacinação ou comprovante. JPEG, PNG ou WebP · Máx. 5MB por foto."}
+               </Typography>
+
+               {/* Grid de fotos já carregadas */}
+               {photos.length > 0 && (
+                  <Box
+                     sx={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: 1,
+                        mb: 1.5,
+                     }}
+                  >
+                     {photos.map((url, index) => {
+                        // Em modo edição, fotos originais do banco não podem ser removidas
+                        // localmente (backend é append-only para photos). Novas fotos
+                        // adicionadas nesta sessão podem ser descartadas antes do submit.
+                        const isOriginal = isEditing && (vaccination?.photos ?? []).includes(url);
+
+                        return (
+                           <Box
+                              key={url}
+                              sx={{
+                                 position: "relative",
+                                 borderRadius: 1.5,
+                                 overflow: "hidden",
+                                 border: "1px solid",
+                                 borderColor: "divider",
+                                 aspectRatio: "1",
+                              }}
+                           >
+                              <Box
+                                 component="img"
+                                 src={url}
+                                 alt={`Foto ${index + 1}`}
+                                 sx={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    display: "block",
+                                 }}
+                              />
+                              {/* Botão de remover — fotos novas removem só localmente,
+                                  fotos originais chamam a API de remoção real */}
+                              <Box
+                                 sx={{
+                                    position: "absolute",
+                                    top: 4,
+                                    right: 4,
+                                    bgcolor: "rgba(0,0,0,0.55)",
+                                    borderRadius: 1,
+                                 }}
+                              >
+                                 <Tooltip title="Remover foto">
+                                    <IconButton
+                                       size="small"
+                                       onClick={() =>
+                                          isOriginal
+                                             ? handleRemoveOriginalPhoto(url)
+                                             : handleRemoveNewPhoto(index)
+                                       }
+                                       sx={{ color: "white", p: 0.4 }}
+                                       disabled={isSubmitting || removingPhotoUrl === url}
+                                    >
+                                       {removingPhotoUrl === url ? (
+                                          <CircularProgress size={14} sx={{ color: "white" }} />
+                                       ) : (
+                                          <DeleteIcon sx={{ fontSize: 16 }} />
+                                       )}
+                                    </IconButton>
+                                 </Tooltip>
+                              </Box>
+                              {/* Badge "salva" para fotos do banco, só informativo agora */}
+                              {isOriginal && (
+                                 <Box
+                                    sx={{
+                                       position: "absolute",
+                                       bottom: 0,
+                                       left: 0,
+                                       right: 0,
+                                       bgcolor: "rgba(0,0,0,0.45)",
+                                       py: 0.25,
+                                       textAlign: "center",
+                                    }}
+                                 >
+                                    <Typography
+                                       variant="caption"
+                                       sx={{ color: "white", fontSize: 10 }}
+                                    >
+                                       Salva
+                                    </Typography>
+                                 </Box>
+                              )}
+                           </Box>
+                        );
+                     })}
+                  </Box>
+               )}
+
+               {/* ImageUploader para adicionar nova foto — só aparece se ainda há espaço */}
+               {canAddMore && (
                   <ImageUploader
-                     value={photoUrl}
-                     onChange={setPhotoUrl}
+                     value={null}
+                     onChange={handlePhotoUploaded}
                      onUploadingChange={setIsUploadingPhoto}
                      folder="vaccinations"
-                     label="Comprovante de Vacinação"
-                     helperText="Foto do cartão de vacinação ou comprovante (JPEG, PNG ou WebP · Máx. 5MB)"
+                     label=""
+                     helperText={`${MAX_PHOTOS - photos.length} foto(s) restante(s)`}
                      disabled={isSubmitting}
                   />
+               )}
 
-                  {/* Veterinário responsável */}
+               {/* Aviso quando o limite foi atingido */}
+               {!canAddMore && (
+                  <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
+                     Limite de {MAX_PHOTOS} fotos atingido.
+                  </Alert>
+               )}
+
+               {/* ── Veterinário responsável ── */}
+               <Typography
+                  variant="caption"
+                  sx={{
+                     fontWeight: 700,
+                     color: "text.secondary",
+                     textTransform: "uppercase",
+                     letterSpacing: 0.8,
+                     display: "block",
+                     mt: 2,
+                  }}
+               >
+                  Responsável
+               </Typography>
+
+               <Box sx={{ mt: 1 }}>
                   <Controller
                      name="veterinarianId"
                      control={control}

@@ -2,6 +2,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import HistoryIcon from "@mui/icons-material/History";
 import SearchIcon from "@mui/icons-material/Search";
 import SyringeIcon from "@mui/icons-material/Vaccines";
 import {
@@ -35,6 +36,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { usePermission } from "@/hooks/usePermission";
 import VaccinationFormDialog from "@/pages/Vaccinations/components/VaccinationFormDialog";
+import VaccinationHistoryDialog from "@/pages/Vaccinations/components/VaccinationHistoryDialog";
 import api from "@/services/api";
 
 // ---- Tipos ---
@@ -50,7 +52,7 @@ interface VaccinationResponse {
    vaccinationDate: string;
    expirationDate: string;
    nextDoseDate: string | null;
-   photoUrl: string | null;
+   photos: string[] | null;
    reaction: string | null;
    notes: string | null;
    veterinarianId: string | null;
@@ -80,6 +82,12 @@ export default function VaccinationsPage() {
    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
    const [vaccinationToDelete, setVaccinationToDelete] = useState<VaccinationResponse | null>(null);
    const [deleting, setDeleting] = useState(false);
+
+   // Histórico de vacinações por animal — visível pra todos os roles
+   const [historyOpen, setHistoryOpen] = useState(false);
+   const [historyAnimal, setHistoryAnimal] = useState<{ id: string; name: string | null } | null>(
+      null,
+   );
 
    // ---- Carrega vacinações ---
    const loadVaccinations = useCallback(async () => {
@@ -116,6 +124,11 @@ export default function VaccinationsPage() {
    function handleEditVaccination(vaccination: VaccinationResponse) {
       setSelectedVaccination(vaccination);
       setFormOpen(true);
+   }
+   // --- Abre histórico de vacinações do animal ----
+   function handleOpenHistory(vaccination: VaccinationResponse) {
+      setHistoryAnimal({ id: vaccination.animalId, name: vaccination.animalName });
+      setHistoryOpen(true);
    }
    // fecha formulario
    function handleFormClose(saved: boolean) {
@@ -330,6 +343,14 @@ export default function VaccinationsPage() {
                               )}
                            </TableCell>
                            <TableCell sx={{ textAlign: "center" }}>
+                              <Tooltip title="Histórico">
+                                 <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenHistory(vaccination)}
+                                 >
+                                    <HistoryIcon fontSize="small" />
+                                 </IconButton>
+                              </Tooltip>
                               {canEdit && (
                                  <>
                                     <Tooltip title="Editar">
@@ -363,6 +384,17 @@ export default function VaccinationsPage() {
             open={formOpen}
             vaccination={selectedVaccination}
             onClose={handleFormClose}
+         />
+
+         {/* ── Diálogo de Histórico ── */}
+         <VaccinationHistoryDialog
+            open={historyOpen}
+            animalId={historyAnimal?.id ?? null}
+            animalName={historyAnimal?.name ?? null}
+            onClose={() => {
+               setHistoryOpen(false);
+               setHistoryAnimal(null);
+            }}
          />
 
          {/* ── Diálogo de Confirmação de Exclusão ── */}
