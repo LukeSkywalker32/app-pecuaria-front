@@ -19,6 +19,7 @@ const EstrusPage = lazy(() => import("@/pages/Estrus/EstrusPage"));
 const PregnanciesPage = lazy(() => import("@/pages/Pregnancies/PregnanciesPage"));
 const BirthsPage = lazy(() => import("@/pages/Births/BirthsPage"));
 const VaccinationsPage = lazy(() => import("@/pages/Vaccinations/VaccinationsPage"));
+const WeighingsPage = lazy(() => import("@/pages/Weighings/WeighingsPage"));
 const MortalitiesPage = lazy(() => import("@/pages/Mortalities/MortalitiesPage"));
 const ManagementPage = lazy(() => import("@/pages/Management/ManagementPage"));
 const UsersPage = lazy(() => import("@/pages/Users/UsersPage"));
@@ -74,6 +75,7 @@ export default function App() {
                      <Route path="/pregnancies" element={<PregnanciesPage />} />
                      <Route path="/births" element={<BirthsPage />} />
                      <Route path="/vaccinations" element={<VaccinationsPage />} />
+                     <Route path="/weighings" element={<WeighingsPage />} />
                      <Route path="/mortalities" element={<MortalitiesPage />} />
                      <Route path="/profile" element={<ProfilePage />} />
                   </Route>

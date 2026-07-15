@@ -11,6 +11,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import MenuIcon from "@mui/icons-material/Menu";
 import PeopleIcon from "@mui/icons-material/People";
 import PetsIcon from "@mui/icons-material/Pets";
+import ScaleIcon from "@mui/icons-material/Scale";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import VaccinesIcon from "@mui/icons-material/Vaccines";
@@ -64,6 +65,7 @@ const NAV_ITEMS: NavItem[] = [
    { label: "Prenhez", path: "/pregnancies", icon: <LocalHospitalIcon /> },
    { label: "Partos", path: "/births", icon: <ChildCareIcon /> },
    { label: "Vacinações", path: "/vaccinations", icon: <VaccinesIcon /> },
+   { label: "Pesagens", path: "/weighings", icon: <ScaleIcon /> },
    { label: "Mortalidade", path: "/mortalities", icon: <HeartBrokenIcon /> },
    {
       label: "Manejo",

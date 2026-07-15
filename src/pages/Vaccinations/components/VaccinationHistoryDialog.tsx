@@ -1,13 +1,16 @@
 // src/pages/Vaccinations/components/VaccinationHistoryDialog.tsx
 
 import CloseIcon from "@mui/icons-material/Close";
+import DownloadIcon from "@mui/icons-material/Download";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import {
    Alert,
    Box,
+   Button,
    Chip,
    CircularProgress,
    Dialog,
+   DialogActions,
    DialogContent,
    DialogTitle,
    IconButton,
@@ -22,6 +25,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import api from "@/services/api";
+import { downloadBlob } from "@/utils/downloadFile";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
@@ -52,6 +56,7 @@ export default function VaccinationHistoryDialog({ open, animalId, animalName, o
 
    // Fotos sendo exibidas no lightbox no momento (null = fechado)
    const [viewingPhotos, setViewingPhotos] = useState<string[] | null>(null);
+   const [exporting, setExporting] = useState(false);
 
    useEffect(() => {
       if (!open || !animalId) return;
@@ -68,6 +73,22 @@ export default function VaccinationHistoryDialog({ open, animalId, animalName, o
 
    function formatDate(date: string): string {
       return new Date(date).toLocaleDateString("pt-BR");
+   }
+
+   async function handleExportPdf() {
+      if (!animalId) return;
+      setExporting(true);
+      setError("");
+      try {
+         const { data } = await api.get(`/vaccinations/animal/${animalId}/export/pdf`, {
+            responseType: "blob",
+         });
+         downloadBlob(data, `vacinacoes-${animalName ?? animalId}.pdf`);
+      } catch {
+         setError("Erro ao exportar PDF");
+      } finally {
+         setExporting(false);
+      }
    }
 
    function handleCloseHistory() {
@@ -147,6 +168,17 @@ export default function VaccinationHistoryDialog({ open, animalId, animalName, o
                   </TableContainer>
                )}
             </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+               {items.length > 0 && (
+                  <Button
+                     startIcon={exporting ? <CircularProgress size={16} /> : <DownloadIcon />}
+                     onClick={handleExportPdf}
+                     disabled={exporting}
+                  >
+                     Exportar PDF
+                  </Button>
+               )}
+            </DialogActions>
          </Dialog>
 
          {/* ── Lightbox simples com as fotos do registro selecionado ── */}

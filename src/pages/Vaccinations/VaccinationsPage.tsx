@@ -1,5 +1,6 @@
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DownloadIcon from "@mui/icons-material/Download";
 import EditIcon from "@mui/icons-material/Edit";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import HistoryIcon from "@mui/icons-material/History";
@@ -38,6 +39,7 @@ import { usePermission } from "@/hooks/usePermission";
 import VaccinationFormDialog from "@/pages/Vaccinations/components/VaccinationFormDialog";
 import VaccinationHistoryDialog from "@/pages/Vaccinations/components/VaccinationHistoryDialog";
 import api from "@/services/api";
+import { downloadBlob } from "@/utils/downloadFile";
 
 // ---- Tipos ---
 interface VaccinationResponse {
@@ -66,6 +68,9 @@ export default function VaccinationsPage() {
    const { hasPermission } = usePermission();
    const canRegister = hasPermission("register_vaccination");
    const canEdit = hasPermission("edit_vaccination");
+   const canExport = hasPermission("export_csv");
+
+   const [exporting, setExporting] = useState(false);
 
    const [vaccinations, setVaccinations] = useState<VaccinationResponse[]>([]);
    const [loading, setLoading] = useState(true);
@@ -130,6 +135,18 @@ export default function VaccinationsPage() {
       setHistoryAnimal({ id: vaccination.animalId, name: vaccination.animalName });
       setHistoryOpen(true);
    }
+
+   async function handleExport() {
+      setExporting(true);
+      try {
+         const { data } = await api.get("/vaccinations/export/xlsx", { responseType: "blob" });
+         downloadBlob(data, "vacinacoes.xlsx");
+      } catch {
+         setError("Erro ao exportar vacinações");
+      } finally {
+         setExporting(false);
+      }
+   }
    // fecha formulario
    function handleFormClose(saved: boolean) {
       setFormOpen(false);
@@ -188,11 +205,27 @@ export default function VaccinationsPage() {
                   Vacinações
                </Typography>
             </Box>
-            {canRegister && (
-               <Button variant="contained" startIcon={<AddIcon />} onClick={handleNewVaccination}>
-                  Registrar Vacinação
-               </Button>
-            )}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+               {canExport && (
+                  <Button
+                     variant="outlined"
+                     startIcon={exporting ? <CircularProgress size={16} /> : <DownloadIcon />}
+                     onClick={handleExport}
+                     disabled={exporting}
+                  >
+                     Exportar Excel
+                  </Button>
+               )}
+               {canRegister && (
+                  <Button
+                     variant="contained"
+                     startIcon={<AddIcon />}
+                     onClick={handleNewVaccination}
+                  >
+                     Registrar Vacinação
+                  </Button>
+               )}
+            </Box>
          </Box>
 
          {/* ── Filtros ── */}
