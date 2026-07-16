@@ -224,7 +224,13 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
          };
 
          if (isEditing) {
-            const { chipId, origin, currentEarTag, ...updatePayload } = payload;
+            const {
+               chipId,
+               origin,
+               currentEarTag,
+               weightKg: _weightKg,
+               ...updatePayload
+            } = payload;
 
             // Se o status remove o animal do pasto (vendido ou morto),
             // não enviar pastureId para evitar conflito no backend entre
@@ -392,6 +398,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      label="Peso"
                      size="small"
                      type="number"
+                     disabled={isEditing}
                      slotProps={{
                         input: {
                            endAdornment: <InputAdornment position="end">kg</InputAdornment>,
@@ -399,7 +406,12 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                         htmlInput: { min: 1, max: 9999, step: 0.1 },
                      }}
                      error={!!errors.weightKg}
-                     helperText={errors.weightKg?.message ?? "Opcional — atualize após pesagem"}
+                     helperText={
+                        errors.weightKg?.message ??
+                        (isEditing
+                           ? "Não editável aqui — registre uma nova pesagem na página de Pesagens"
+                           : "Peso inicial — vira a primeira pesagem no histórico do animal")
+                     }
                      {...register("weightKg")}
                   />
                </Box>

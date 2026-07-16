@@ -59,6 +59,10 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
       "edit_buyer",
       "delete_buyer",
       "view_buyers",
+      "register_weighing",
+      "edit_weighing",
+      "delete_weighing",
+      "view_weighing",
    ],
    owner: [
       "create_user",
@@ -104,6 +108,10 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
       "edit_buyer",
       "delete_buyer",
       "view_buyers",
+      "register_weighing",
+      "edit_weighing",
+      "delete_weighing",
+      "view_weighing",
    ],
    farmmanager: [
       "create_animal",
@@ -130,6 +138,13 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
       "edit_mortality",
       "activate_user",
       "deactivate_user",
+      "view_reports",
+      "export_pdf",
+      "export_csv",
+      "register_weighing",
+      "edit_weighing",
+      "delete_weighing",
+      "view_weighing",
    ],
    veterinarian: [
       // Veterinário SÓ visualiza animais — não cria, edita ou deleta
@@ -140,6 +155,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
       "edit_birth",
       "register_mortality",
       "register_estrus",
+      "register_weighing",
+      "view_weighing",
    ],
 };
 //hook principal - retorna função can() para checar permissoes
