@@ -1,5 +1,4 @@
 // src/pages/Weighings/components/WeighingFormDialog.tsx
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
    Alert,
@@ -21,15 +20,14 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import api from "@/services/api";
+import { isoToLocalDate, todayLocalISO } from "@/utils/date";
 
 // ─── Tipos auxiliares ─────────────────────────────────────────────────────
-
 interface Animal {
    id: string;
    name: string;
    currentEarTag: string | null;
 }
-
 interface WeighingResponse {
    id: string;
    animalId: string;
@@ -55,24 +53,19 @@ const schema = z.object({
       .optional()
       .or(z.literal("")),
 });
-
 type FormData = z.infer<typeof schema>;
 
 // ─── Props ────────────────────────────────────────────────────────────────
-
 interface Props {
    open: boolean;
    weighing: WeighingResponse | null;
-   // Pré-seleciona o animal quando aberto a partir da ficha de um animal específico
    defaultAnimalId?: string | null;
    onClose: (saved: boolean) => void;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────
-
 export default function WeighingFormDialog({ open, weighing, defaultAnimalId, onClose }: Props) {
    const isEditing = !!weighing;
-
    const [animals, setAnimals] = useState<Animal[]>([]);
    const [animalsLoading, setAnimalsLoading] = useState(false);
    const [submitError, setSubmitError] = useState("");
@@ -97,7 +90,7 @@ export default function WeighingFormDialog({ open, weighing, defaultAnimalId, on
    useEffect(() => {
       if (!open) return;
       setAnimalsLoading(true);
-      api.get<Animal[]>("/animals?status=active")
+      api.get("/animals?status=active")
          .then(({ data }) => setAnimals(data))
          .catch(() => setAnimals([]))
          .finally(() => setAnimalsLoading(false));
@@ -109,14 +102,14 @@ export default function WeighingFormDialog({ open, weighing, defaultAnimalId, on
          reset({
             animalId: weighing.animalId,
             weightKg: String(weighing.weightKg),
-            date: weighing.date ? new Date(weighing.date).toISOString().split("T")[0] : "",
+            date: isoToLocalDate(weighing.date),
             notes: weighing.notes ?? "",
          });
       } else if (open && !weighing) {
          reset({
             animalId: defaultAnimalId ?? "",
             weightKg: "",
-            date: new Date().toISOString().split("T")[0],
+            date: todayLocalISO(),
             notes: "",
          });
       }
@@ -132,14 +125,12 @@ export default function WeighingFormDialog({ open, weighing, defaultAnimalId, on
             date: data.date,
             notes: data.notes && data.notes !== "" ? data.notes.trim() : null,
          };
-
          if (isEditing) {
             const { animalId, ...updatePayload } = payload;
             await api.put(`/weighings/${weighing!.id}`, updatePayload);
          } else {
             await api.post("/weighings", payload);
          }
-
          onClose(true);
       } catch (err: any) {
          const msg = err?.response?.data?.error ?? "Erro ao salvar pesagem. Tente novamente.";
@@ -149,24 +140,19 @@ export default function WeighingFormDialog({ open, weighing, defaultAnimalId, on
 
    return (
       <Dialog open={open} onClose={() => onClose(false)} maxWidth="sm" fullWidth>
-         <DialogTitle sx={{ fontWeight: 700 }}>
-            {isEditing ? "Editar Pesagem" : "Registrar Pesagem"}
-         </DialogTitle>
-         <form onSubmit={handleSubmit(onSubmit)} noValidate>
-            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-               {submitError && <Alert severity="error">{submitError}</Alert>}
-
-               <Controller
-                  name="animalId"
-                  control={control}
-                  render={({ field }) => (
-                     <FormControl size="small" error={!!errors.animalId} disabled={isEditing}>
-                        <InputLabel>Animal</InputLabel>
-                        <Select {...field} label="Animal" disabled={animalsLoading || isEditing}>
+         <DialogTitle>{isEditing ? "Editar Pesagem" : "Registrar Pesagem"}</DialogTitle>
+         {submitError && <Alert severity="error">{submitError}</Alert>}
+         <form onSubmit={handleSubmit(onSubmit)}>
+            <DialogContent>
+               <FormControl fullWidth margin="normal" error={!!errors.animalId}>
+                  <InputLabel>Animal</InputLabel>
+                  <Controller
+                     name="animalId"
+                     control={control}
+                     render={({ field }) => (
+                        <Select {...field} label="Animal" disabled={isEditing}>
                            {animalsLoading ? (
-                              <MenuItem disabled>
-                                 <CircularProgress size={16} sx={{ mr: 1 }} /> Carregando...
-                              </MenuItem>
+                              <MenuItem disabled>Carregando...</MenuItem>
                            ) : (
                               animals.map(a => (
                                  <MenuItem key={a.id} value={a.id}>
@@ -175,51 +161,57 @@ export default function WeighingFormDialog({ open, weighing, defaultAnimalId, on
                               ))
                            )}
                         </Select>
-                        <FormHelperText>
-                           {errors.animalId?.message ??
-                              (isEditing ? "Não é possível trocar o animal na edição" : " ")}
-                        </FormHelperText>
-                     </FormControl>
-                  )}
+                     )}
+                  />
+                  <FormHelperText>
+                     {errors.animalId?.message ??
+                        (isEditing ? "Não é possível trocar o animal na edição" : " ")}
+                  </FormHelperText>
+               </FormControl>
+
+               <TextField
+                  {...register("weightKg")}
+                  label="Peso (kg)"
+                  type="number"
+                  fullWidth
+                  margin="normal"
+                  error={!!errors.weightKg}
+                  helperText={errors.weightKg?.message}
+                  slotProps={{
+                     htmlInput: { step: "0.1", min: "0", max: "1500" },
+                  }}
                />
 
-               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                  <TextField
-                     {...register("weightKg")}
-                     label="Peso (kg)"
-                     type="number"
-                     size="small"
-                     inputProps={{ step: "0.1", min: 0 }}
-                     error={!!errors.weightKg}
-                     helperText={errors.weightKg?.message}
-                  />
-                  <TextField
-                     {...register("date")}
-                     label="Data da pesagem"
-                     type="date"
-                     size="small"
-                     InputLabelProps={{ shrink: true }}
-                     error={!!errors.date}
-                     helperText={errors.date?.message}
-                  />
-               </Box>
+               <TextField
+                  {...register("date")}
+                  label="Data da pesagem"
+                  type="date"
+                  fullWidth
+                  margin="normal"
+                  error={!!errors.date}
+                  helperText={errors.date?.message}
+                  slotProps={{
+                     inputLabel: { shrink: true },
+                  }}
+               />
 
                <TextField
                   {...register("notes")}
                   label="Notas (opcional)"
-                  size="small"
                   multiline
-                  minRows={2}
+                  rows={3}
+                  fullWidth
+                  margin="normal"
                   error={!!errors.notes}
                   helperText={errors.notes?.message}
                />
             </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2 }}>
+            <DialogActions>
                <Button onClick={() => onClose(false)} disabled={isSubmitting}>
                   Cancelar
                </Button>
                <Button type="submit" variant="contained" disabled={isSubmitting}>
-                  {isSubmitting ? <CircularProgress size={20} /> : "Salvar"}
+                  {isSubmitting ? <CircularProgress size={24} /> : "Salvar"}
                </Button>
             </DialogActions>
          </form>
