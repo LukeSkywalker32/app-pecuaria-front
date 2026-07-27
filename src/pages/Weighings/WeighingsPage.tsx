@@ -2,6 +2,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DownloadIcon from "@mui/icons-material/Download";
 import EditIcon from "@mui/icons-material/Edit";
+import HistoryIcon from "@mui/icons-material/History";
 import ScaleIcon from "@mui/icons-material/Scale";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -30,6 +31,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { usePermission } from "@/hooks/usePermission";
 import WeighingFormDialog from "@/pages/Weighings/components/WeighingFormDialog";
+import WeighingHistoryDialog from "@/pages/Weighings/components/WeighingHistoryDialog";
 import api from "@/services/api";
 import { downloadBlob } from "@/utils/downloadFile";
 
@@ -69,6 +71,25 @@ export default function WeighingsPage() {
    const [weighingToDelete, setWeighingToDelete] = useState<WeighingResponse | null>(null);
    const [deleting, setDeleting] = useState(false);
 
+   const [historyOpen, setHistoryOpen] = useState(false);
+   const [selectedAnimalForHistory, setSelectedAnimalForHistory] = useState<string | null>(null);
+   const [historyWeighings, setHistoryWeighings] = useState<WeighingResponse[]>([]);
+   const [historyLoading, setHistoryLoading] = useState(false);
+
+   const loadAnimalHistory = async (animalId: string) => {
+      setHistoryLoading(true);
+      try {
+         const { data } = await api.get<WeighingResponse[]>(`/weighings/animal/${animalId}`);
+         setHistoryWeighings(data);
+         setSelectedAnimalForHistory(animalId);
+         setHistoryOpen(true);
+      } catch {
+         setError("Erro ao carregar histórico");
+      } finally {
+         setHistoryLoading(false);
+      }
+   };
+
    const loadWeighings = useCallback(() => {
       setLoading(true);
       setError("");
@@ -85,7 +106,7 @@ export default function WeighingsPage() {
       loadWeighings();
    }, [loadWeighings]);
 
-   function handleNewWeighing() {
+   async function handleNewWeighing() {
       setSelectedWeighing(null);
       setFormOpen(true);
    }
@@ -264,6 +285,14 @@ export default function WeighingsPage() {
                                        </IconButton>
                                     </Tooltip>
                                  )}
+                                 <Tooltip title="Ver histórico">
+                                    <IconButton
+                                       size="small"
+                                       onClick={() => loadAnimalHistory(w.animalId)}
+                                    >
+                                       <HistoryIcon fontSize="small" />
+                                    </IconButton>
+                                 </Tooltip>
                               </TableCell>
                            </TableRow>
                         ))
@@ -273,11 +302,18 @@ export default function WeighingsPage() {
             </TableContainer>
          </Paper>
 
-         {/* ── Diálogo de Formulário ── */}
+         {/* ── Diálogo de Formulário de nova pesagem ── */}
          <WeighingFormDialog
             open={formOpen}
             weighing={selectedWeighing}
             onClose={handleFormClose}
+         />
+         {/* ── Diálogo de Formulário de histórico ── */}
+         <WeighingHistoryDialog
+            open={historyOpen}
+            weighings={historyWeighings}
+            onClose={() => setHistoryOpen(false)}
+            loading={historyLoading}
          />
 
          {/* ── Diálogo de Confirmação de Exclusão ── */}

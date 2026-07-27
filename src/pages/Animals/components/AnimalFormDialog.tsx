@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import api from "@/services/api";
+import { isoToLocalDate, todayLocalISO } from "@/utils/date";
 import { PastureFormDialog } from "../../Pasture/PasturesPage";
 import type { AnimalResponse } from "../AnimalsPage";
 
@@ -174,9 +175,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
    // ── Preenche formulário no modo edição ───────────────────────────────
    useEffect(() => {
       if (open && animal) {
-         const birthDateFormatted = animal.birthDate
-            ? new Date(animal.birthDate).toISOString().split("T")[0]
-            : "";
+         const birthDateFormatted = isoToLocalDate(animal.birthDate);
 
          reset({
             chipId: animal.chipId,
@@ -386,7 +385,7 @@ export default function AnimalFormDialog({ open, animal, onClose }: Props) {
                      type="date"
                      slotProps={{
                         inputLabel: { shrink: true },
-                        htmlInput: { max: new Date().toISOString().split("T")[0] },
+                        htmlInput: { max: todayLocalISO() },
                      }}
                      error={!!errors.birthDate}
                      helperText={errors.birthDate?.message}

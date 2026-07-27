@@ -1,8 +1,6 @@
-// src/pages/Weighings/components/WeighingFormDialog.tsx
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
    Alert,
-   Box,
    Button,
    CircularProgress,
    Dialog,
@@ -129,7 +127,14 @@ export default function WeighingFormDialog({ open, weighing, defaultAnimalId, on
             const { animalId, ...updatePayload } = payload;
             await api.put(`/weighings/${weighing!.id}`, updatePayload);
          } else {
-            await api.post("/weighings", payload);
+            const { data: existing } = await api.get(`/weighings/animal/${data.animalId}?limit=1`)
+            if (existing && existing.length > 0) {
+               const latestId = existing[0].id;
+               const { animalId, ...updatePayload } = payload;
+               await api.put(`/weighings/${latestId}`, updatePayload);
+            } else {
+               await api.post("/weighings", payload);
+            }
          }
          onClose(true);
       } catch (err: any) {

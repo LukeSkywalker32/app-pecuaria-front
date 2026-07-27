@@ -1,10 +1,14 @@
+import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import BabyChangingStationIcon from "@mui/icons-material/BabyChangingStation";
 import LabelIcon from "@mui/icons-material/Label";
 import LabelOffIcon from "@mui/icons-material/LabelOff";
 import PetsIcon from "@mui/icons-material/Pets";
 import PregnantWomanIcon from "@mui/icons-material/PregnantWoman";
+import ScaleIcon from "@mui/icons-material/Scale";
 import ScienceIcon from "@mui/icons-material/Science";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import VaccinesIcon from "@mui/icons-material/Vaccines";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import {
@@ -23,11 +27,14 @@ import {
    TableHead,
    TableRow,
    Tabs,
+   Tooltip,
    Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { usePermission } from "@/hooks/usePermission";
 import AnimalMovementHistory from "@/pages/Management/components/AnimalMovementHistory";
+import WeighingFormDialog from "@/pages/Weighings/components/WeighingFormDialog";
 import api from "@/services/api";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
@@ -242,6 +249,17 @@ function severityLabel(v: string | null) {
 function severityColor(v: string | null): any {
    if (!v) return "default";
    return { low: "success", medium: "warning", high: "error" }[v] ?? "default";
+}
+
+// ─── Tipo: Pesagem ────────────────────────────────────────────────────────
+
+interface WeighingRecord {
+   id: string;
+   weightKg: number;
+   date: string;
+   gmd: number | null;
+   notes: string | null;
+   registeredByName: string | null;
 }
 
 // ─── Sub-componente: estado vazio ─────────────────────────────────────────
@@ -916,6 +934,140 @@ function MortalityTab({ animalId }: { animalId: string }) {
    );
 }
 
+// ─── TAB: Pesagens ────────────────────────────────────────────────────────
+
+function WeighingsTab({ animalId }: { animalId: string }) {
+   const { can } = usePermission();
+   const [records, setRecords] = useState<WeighingRecord[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [formOpen, setFormOpen] = useState(false);
+
+   function loadWeighings() {
+      setLoading(true);
+      api.get<WeighingRecord[]>(`/weighings/animal/${animalId}`)
+         .then(({ data }) => setRecords(data))
+         .catch(() => setRecords([]))
+         .finally(() => setLoading(false));
+   }
+
+   useEffect(() => {
+      loadWeighings();
+   }, [animalId]);
+
+   function handleFormClose(saved: boolean) {
+      setFormOpen(false);
+      if (saved) loadWeighings();
+   }
+
+   function renderGmd(gmd: number | null) {
+      if (gmd === null) {
+         return (
+            <Typography variant="caption" color="text.secondary">
+               — (1ª pesagem)
+            </Typography>
+         );
+      }
+      const isPositive = gmd >= 0;
+      return (
+         <Chip
+            size="small"
+            icon={isPositive ? <TrendingUpIcon /> : <TrendingDownIcon />}
+            label={`${gmd.toFixed(3)} kg/dia`}
+            color={isPositive ? "success" : "error"}
+            variant="outlined"
+            sx={{ fontSize: 11, height: 22 }}
+         />
+      );
+   }
+
+   if (loading) return <LoadingState />;
+
+   return (
+      <Box>
+         {can("register_weighing") && (
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.5 }}>
+               <Tooltip title="Registrar nova pesagem para este animal">
+                  <Button
+                     size="small"
+                     variant="outlined"
+                     startIcon={<AddIcon />}
+                     onClick={() => setFormOpen(true)}
+                  >
+                     Nova Pesagem
+                  </Button>
+               </Tooltip>
+            </Box>
+         )}
+
+         {records.length === 0 ? (
+            <EmptyState message="Nenhuma pesagem registrada para este animal." />
+         ) : (
+            <TableContainer
+               component={Paper}
+               elevation={0}
+               sx={{ border: "1px solid", borderColor: "divider" }}
+            >
+               <Table size="small">
+                  <TableHead>
+                     <TableRow sx={{ bgcolor: "#F9FAFB" }}>
+                        {["DATA", "PESO (KG)", "GMD", "REGISTRADO POR", "NOTAS"].map(h => (
+                           <TableCell
+                              key={h}
+                              sx={{ fontWeight: 700, color: "text.secondary", fontSize: 12 }}
+                           >
+                              {h}
+                           </TableCell>
+                        ))}
+                     </TableRow>
+                  </TableHead>
+                  <TableBody>
+                     {records.map(r => (
+                        <TableRow key={r.id} hover sx={{ "&:last-child td": { border: 0 } }}>
+                           <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                 {formatDate(r.date)}
+                              </Typography>
+                           </TableCell>
+                           <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                 {r.weightKg.toFixed(1)} kg
+                              </Typography>
+                           </TableCell>
+                           <TableCell>{renderGmd(r.gmd)}</TableCell>
+                           <TableCell>
+                              <Typography variant="body2">{r.registeredByName ?? "—"}</Typography>
+                           </TableCell>
+                           <TableCell>
+                              <Typography
+                                 variant="body2"
+                                 color={r.notes ? "text.primary" : "text.disabled"}
+                                 sx={{
+                                    maxWidth: 200,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                 }}
+                              >
+                                 {r.notes ?? "—"}
+                              </Typography>
+                           </TableCell>
+                        </TableRow>
+                     ))}
+                  </TableBody>
+               </Table>
+            </TableContainer>
+         )}
+
+         <WeighingFormDialog
+            open={formOpen}
+            weighing={null}
+            defaultAnimalId={animalId}
+            onClose={handleFormClose}
+         />
+      </Box>
+   );
+}
+
 // ─── TabPanel ─────────────────────────────────────────────────────────────
 
 function TabPanel({
@@ -1125,6 +1277,11 @@ export default function AnimalDetailPage() {
                   iconPosition="start"
                   label="Partos"
                />
+               <Tab
+                  icon={<ScaleIcon sx={{ fontSize: 16 }} />}
+                  iconPosition="start"
+                  label="Pesagens"
+               />
                <Tab label="Manejo" />
                <Tab
                   icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
@@ -1150,9 +1307,12 @@ export default function AnimalDetailPage() {
                   <BirthsTab animalId={animal.id} />
                </TabPanel>
                <TabPanel value={tab} index={5}>
-                  <AnimalMovementHistory animalId={animal.id} />
+                  <WeighingsTab animalId={animal.id} />
                </TabPanel>
                <TabPanel value={tab} index={6}>
+                  <AnimalMovementHistory animalId={animal.id} />
+               </TabPanel>
+               <TabPanel value={tab} index={7}>
                   <MortalityTab animalId={animal.id} />
                </TabPanel>
             </Box>
