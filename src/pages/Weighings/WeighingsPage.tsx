@@ -35,7 +35,7 @@ import WeighingHistoryDialog from "@/pages/Weighings/components/WeighingHistoryD
 import api from "@/services/api";
 import { downloadBlob } from "@/utils/downloadFile";
 
-// ---- Tipos ---
+// --- Tipos ---
 interface WeighingResponse {
    id: string;
    farmId: string;
@@ -49,6 +49,27 @@ interface WeighingResponse {
    registeredByName: string | null;
    gmd: number | null;
    createdAt: string;
+}
+
+// Agrupa pesagens por animal e retorna apenas a mais recente de cada um
+function getLatestWeighingsByAnimal(weighings: WeighingResponse[]): WeighingResponse[] {
+   const latestByAnimal = new Map<string, WeighingResponse>();
+
+   for (const w of weighings) {
+      const current = latestByAnimal.get(w.animalId);
+      if (!current) {
+         latestByAnimal.set(w.animalId, w);
+         continue;
+      }
+      // Compara datas para encontrar a mais recente
+      const isMoreRecent =
+         w.date > current.date || (w.date === current.date && w.createdAt > current.createdAt);
+      if (isMoreRecent) {
+         latestByAnimal.set(w.animalId, w);
+      }
+   }
+
+   return Array.from(latestByAnimal.values());
 }
 
 // Acha, pra cada animal, o id da pesagem mais antiga (mesmo critério do
@@ -78,7 +99,7 @@ export default function WeighingsPage() {
 
    const [exporting, setExporting] = useState(false);
 
-   const [weighings, setWeighings] = useState<WeighingResponse[]>([]);
+   const [allWeighings, setAllWeighings] = useState<WeighingResponse[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState("");
 
@@ -94,12 +115,16 @@ export default function WeighingsPage() {
    const [historyWeighings, setHistoryWeighings] = useState<WeighingResponse[]>([]);
    const [historyLoading, setHistoryLoading] = useState(false);
 
-   const firstWeighingIds = useMemo(() => getFirstWeighingIds(weighings), [weighings]);
+   // Pesagens agrupadas: apenas a mais recente de cada animal para exibição na tabela principal
+   const latestWeighings = useMemo(() => getLatestWeighingsByAnimal(allWeighings), [allWeighings]);
+
+   // IDs da primeira pesagem de cada animal (para controle de edição)
+   const firstWeighingIds = useMemo(() => getFirstWeighingIds(allWeighings), [allWeighings]);
 
    const loadAnimalHistory = async (animalId: string) => {
       setHistoryLoading(true);
       try {
-         const { data } = await api.get<WeighingResponse[]>(`/weighings/animal/${animalId}`, {
+         const { data } = await api.get(`/weighings/animal/${animalId}`, {
             params: { _t: Date.now() },
          });
          setHistoryWeighings(data);
@@ -119,8 +144,8 @@ export default function WeighingsPage() {
       // resposta guardada dessa URL, independente do header Cache-Control
       // do servidor já estar em produção ou não (o Cache-Control resolve
       // isso do lado certo, mas essa camada aqui não depende de deploy).
-      api.get<WeighingResponse[]>("/weighings", { params: { _t: Date.now() } })
-         .then(({ data }) => setWeighings(data))
+      api.get("/weighings", { params: { _t: Date.now() } })
+         .then(({ data }) => setAllWeighings(data))
          .catch(err => {
             const msg = err?.response?.data?.error ?? "Erro ao carregar pesagens";
             setError(msg);
@@ -155,7 +180,7 @@ export default function WeighingsPage() {
       // o GMD das pesagens vizinhas do mesmo animal, e essa parte só o
       // recálculo completo do backend resolve.
       if (savedWeighing) {
-         setWeighings(prev => {
+         setAllWeighings(prev => {
             const exists = prev.some(w => w.id === savedWeighing.id);
             return exists
                ? prev.map(w => (w.id === savedWeighing.id ? savedWeighing : w))
@@ -173,7 +198,10 @@ export default function WeighingsPage() {
    async function handleExport() {
       setExporting(true);
       try {
-         const { data } = await api.get("/weighings/export/xlsx", { responseType: "blob" });
+         const { data } = await api.get("/weighings/export/xlsx", {
+            responseType: "blob",
+            params: { _t: Date.now() },
+         });
          downloadBlob(data, "pesagens.xlsx");
       } catch {
          setError("Erro ao exportar pesagens");
@@ -205,15 +233,12 @@ export default function WeighingsPage() {
    function renderGmd(gmd: number | null) {
       if (gmd === null) {
          return (
-            <Typography variant="caption" color="text.secondary">
-               — (1ª pesagem)
-            </Typography>
+            <Chip icon={<ScaleIcon />} label="— (1ª pesagem)" variant="outlined" color="default" />
          );
       }
       const isPositive = gmd >= 0;
       return (
          <Chip
-            size="small"
             icon={isPositive ? <TrendingUpIcon /> : <TrendingDownIcon />}
             label={`${gmd.toFixed(3)} kg/dia`}
             color={isPositive ? "success" : "error"}
@@ -224,42 +249,40 @@ export default function WeighingsPage() {
 
    return (
       <Box sx={{ p: 3 }}>
-         <Box
-            sx={{
-               display: "flex",
-               justifyContent: "space-between",
-               alignItems: "center",
-               mb: 3,
-            }}
-         >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-               <ScaleIcon fontSize="large" color="primary" />
-               <Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                     Pesagens
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                     Histórico de pesagens e Ganho Médio Diário (GMD) do rebanho
-                  </Typography>
-               </Box>
+         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+               <ScaleIcon sx={{ fontSize: 32, color: "primary.main" }} />
+               <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  Pesagens
+               </Typography>
             </Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-               {canExport && (
-                  <Button
-                     variant="outlined"
-                     startIcon={exporting ? <CircularProgress size={16} /> : <DownloadIcon />}
-                     onClick={handleExport}
-                     disabled={exporting}
-                  >
-                     Exportar Excel
-                  </Button>
-               )}
-               {canRegister && (
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleNewWeighing}>
-                     Nova Pesagem
-                  </Button>
-               )}
-            </Box>
+            <Typography variant="body1" color="text.secondary" sx={{ mt: 2, mb: 1 }}>
+               Histórico de pesagens e Ganho Médio Diário (GMD) do rebanho
+            </Typography>
+         </Box>
+
+         <Box sx={{ mb: 2, display: "flex", gap: 1 }}>
+            {canExport && (
+               <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={handleExport}
+                  disabled={exporting}
+                  sx={{ padding: 1, fontSize: 16 }}
+               >
+                  Exportar Excel
+               </Button>
+            )}
+            {canRegister && (
+               <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleNewWeighing}
+                  sx={{ padding: 1, fontSize: 16 }}
+               >
+                  Nova Pesagem
+               </Button>
+            )}
          </Box>
 
          {error && (
@@ -268,91 +291,80 @@ export default function WeighingsPage() {
             </Alert>
          )}
 
-         <Paper variant="outlined">
-            <TableContainer>
-               <Table size="small">
-                  <TableHead>
+         <TableContainer component={Paper}>
+            <Table>
+               <TableHead>
+                  <TableRow>
+                     <TableCell>Animal</TableCell>
+                     <TableCell>Peso</TableCell>
+                     <TableCell>Data</TableCell>
+                     <TableCell>GMD</TableCell>
+                     <TableCell>Registrado por</TableCell>
+                     <TableCell>Ações</TableCell>
+                  </TableRow>
+               </TableHead>
+               <TableBody>
+                  {loading ? (
                      <TableRow>
-                        <TableCell sx={{ fontWeight: 700 }}>Animal</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Peso</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Data</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>GMD</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Registrado por</TableCell>
-                        <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Ações</TableCell>
+                        <TableCell colSpan={6} align="center">
+                           <CircularProgress />
+                        </TableCell>
                      </TableRow>
-                  </TableHead>
-                  <TableBody>
-                     {loading ? (
-                        <TableRow>
-                           <TableCell colSpan={6} sx={{ textAlign: "center", py: 4 }}>
-                              <CircularProgress />
+                  ) : latestWeighings.length === 0 ? (
+                     <TableRow>
+                        <TableCell colSpan={6} align="center">
+                           Nenhuma pesagem registrada ainda.
+                        </TableCell>
+                     </TableRow>
+                  ) : (
+                     latestWeighings.map(w => (
+                        <TableRow key={w.animalId}>
+                           <TableCell>
+                              {w.animalName}
+                              {w.animalEarTag ? ` — ${w.animalEarTag}` : ""}
                            </TableCell>
-                        </TableRow>
-                     ) : weighings.length === 0 ? (
-                        <TableRow>
-                           <TableCell colSpan={6} sx={{ textAlign: "center", py: 4 }}>
-                              <Typography color="text.secondary">
-                                 Nenhuma pesagem registrada ainda.
-                              </Typography>
-                           </TableCell>
-                        </TableRow>
-                     ) : (
-                        weighings.map(w => (
-                           <TableRow key={w.id} hover>
-                              <TableCell>
-                                 {w.animalName}
-                                 {w.animalEarTag ? ` — ${w.animalEarTag}` : ""}
-                              </TableCell>
-                              <TableCell>{w.weightKg.toFixed(1)} kg</TableCell>
-                              <TableCell>{formatDate(w.date)}</TableCell>
-                              <TableCell>{renderGmd(w.gmd)}</TableCell>
-                              <TableCell>{w.registeredByName ?? "—"}</TableCell>
-                              <TableCell sx={{ textAlign: "center" }}>
-                                 {canEdit &&
-                                    (firstWeighingIds.has(w.id) ? (
-                                       <Tooltip title="Editar">
-                                          <IconButton
-                                             size="small"
-                                             onClick={() => handleEditWeighing(w)}
-                                          >
-                                             <EditIcon fontSize="small" />
-                                          </IconButton>
-                                       </Tooltip>
-                                    ) : (
-                                       <Tooltip title="Só a 1ª pesagem do animal pode ter peso/data editados. Pra corrigir esta, apague e registre de novo.">
-                                          <span>
-                                             <IconButton size="small" disabled>
-                                                <EditIcon fontSize="small" />
-                                             </IconButton>
-                                          </span>
-                                       </Tooltip>
-                                    ))}
-                                 {canDelete && (
-                                    <Tooltip title="Deletar">
-                                       <IconButton
-                                          size="small"
-                                          onClick={() => handleDeleteClick(w)}
-                                       >
-                                          <DeleteIcon fontSize="small" />
-                                       </IconButton>
-                                    </Tooltip>
-                                 )}
-                                 <Tooltip title="Ver histórico">
+                           <TableCell>{w.weightKg.toFixed(1)} kg</TableCell>
+                           <TableCell>{formatDate(w.date)}</TableCell>
+                           <TableCell>{renderGmd(w.gmd)}</TableCell>
+                           <TableCell>{w.registeredByName ?? "—"}</TableCell>
+                           <TableCell>
+                              {canEdit &&
+                                 (firstWeighingIds.has(w.id) ? (
                                     <IconButton
                                        size="small"
-                                       onClick={() => loadAnimalHistory(w.animalId)}
+                                       color="primary"
+                                       onClick={() => handleEditWeighing(w)}
                                     >
-                                       <HistoryIcon fontSize="small" />
+                                       <EditIcon />
                                     </IconButton>
-                                 </Tooltip>
-                              </TableCell>
-                           </TableRow>
-                        ))
-                     )}
-                  </TableBody>
-               </Table>
-            </TableContainer>
-         </Paper>
+                                 ) : (
+                                    <IconButton size="small" color="default" disabled>
+                                       <EditIcon />
+                                    </IconButton>
+                                 ))}
+                              {canDelete && (
+                                 <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleDeleteClick(w)}
+                                 >
+                                    <DeleteIcon />
+                                 </IconButton>
+                              )}
+                              <IconButton
+                                 size="small"
+                                 color="info"
+                                 onClick={() => loadAnimalHistory(w.animalId)}
+                              >
+                                 <HistoryIcon />
+                              </IconButton>
+                           </TableCell>
+                        </TableRow>
+                     ))
+                  )}
+               </TableBody>
+            </Table>
+         </TableContainer>
 
          {/* ── Diálogo de Formulário de nova pesagem ── */}
          <WeighingFormDialog
@@ -360,12 +372,14 @@ export default function WeighingsPage() {
             weighing={selectedWeighing}
             onClose={handleFormClose}
          />
+
          {/* ── Diálogo de Formulário de histórico ── */}
          <WeighingHistoryDialog
             open={historyOpen}
+            animalId={selectedAnimalForHistory}
             weighings={historyWeighings}
-            onClose={() => setHistoryOpen(false)}
             loading={historyLoading}
+            onClose={() => setHistoryOpen(false)}
          />
 
          {/* ── Diálogo de Confirmação de Exclusão ── */}
@@ -387,7 +401,7 @@ export default function WeighingsPage() {
                   variant="contained"
                   disabled={deleting}
                >
-                  {deleting ? <CircularProgress size={20} /> : "Remover"}
+                  {deleting ? <CircularProgress size={24} /> : "Remover"}
                </Button>
             </DialogActions>
          </Dialog>

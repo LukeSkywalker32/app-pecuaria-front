@@ -29,12 +29,19 @@ interface WeighingResponse {
 
 interface Props {
    open: boolean;
+   animalId: string | null;
    weighings: WeighingResponse[];
    loading: boolean;
    onClose: () => void;
 }
 
-export default function WeighingHistoryDialog({ open, weighings, loading, onClose }: Props) {
+export default function WeighingHistoryDialog({
+   open,
+   animalId,
+   weighings,
+   loading,
+   onClose,
+}: Props) {
    return (
       <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
          <DialogTitle>Histórico Completo de Pesagens</DialogTitle>
