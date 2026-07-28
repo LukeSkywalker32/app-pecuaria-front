@@ -26,12 +26,26 @@ interface Animal {
    name: string;
    currentEarTag: string | null;
 }
-interface WeighingResponse {
+interface WeighingEditTarget {
    id: string;
    animalId: string;
    weightKg: number;
    date: string;
    notes: string | null;
+}
+interface WeighingResponse {
+   id: string;
+   farmId: string;
+   animalId: string;
+   animalEarTag: string | null;
+   animalName: string | null;
+   weightKg: number;
+   date: string;
+   notes: string | null;
+   registeredById: string | null;
+   registeredByName: string | null;
+   gmd: number | null;
+   createdAt: string;
 }
 
 const schema = z.object({
@@ -56,9 +70,9 @@ type FormData = z.infer<typeof schema>;
 // ─── Props ────────────────────────────────────────────────────────────────
 interface Props {
    open: boolean;
-   weighing: WeighingResponse | null;
+   weighing: WeighingEditTarget | null;
    defaultAnimalId?: string | null;
-   onClose: (saved: boolean) => void;
+   onClose: (saved: boolean, savedWeighing?: WeighingResponse) => void;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────
@@ -123,20 +137,20 @@ export default function WeighingFormDialog({ open, weighing, defaultAnimalId, on
             date: data.date,
             notes: data.notes && data.notes !== "" ? data.notes.trim() : null,
          };
+         let saved: WeighingResponse;
          if (isEditing) {
             const { animalId, ...updatePayload } = payload;
-            await api.put(`/weighings/${weighing!.id}`, updatePayload);
+            const { data } = await api.put<WeighingResponse>(
+               `/weighings/${weighing!.id}`,
+               updatePayload,
+            );
+            saved = data;
          } else {
-            const { data: existing } = await api.get(`/weighings/animal/${data.animalId}?limit=1`)
-            if (existing && existing.length > 0) {
-               const latestId = existing[0].id;
-               const { animalId, ...updatePayload } = payload;
-               await api.put(`/weighings/${latestId}`, updatePayload);
-            } else {
-               await api.post("/weighings", payload);
-            }
+            const { data } = await api.post<WeighingResponse>("/weighings", payload);
+            saved = data;
          }
-         onClose(true);
+         onClose(true, saved);
+         return;
       } catch (err: any) {
          const msg = err?.response?.data?.error ?? "Erro ao salvar pesagem. Tente novamente.";
          setSubmitError(msg);

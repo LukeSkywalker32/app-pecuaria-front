@@ -116,10 +116,27 @@ export default function WeighingsPage() {
       setFormOpen(true);
    }
 
-   function handleFormClose(saved: boolean) {
+   function handleFormClose(saved: boolean, savedWeighing?: WeighingResponse) {
       setFormOpen(false);
       setSelectedWeighing(null);
-      if (saved) loadWeighings();
+      if (!saved) return;
+
+      // Atualiza a linha na hora, com o que o backend já devolveu no
+      // POST/PUT (inclusive o `gmd` recalculado) — assim a tela não fica
+      // um instante mostrando o estado antigo até o loadWeighings() de
+      // baixo voltar. loadWeighings() continua rodando na sequência
+      // porque criar/editar uma pesagem no meio do histórico também muda
+      // o GMD das pesagens vizinhas do mesmo animal, e essa parte só o
+      // recálculo completo do backend resolve.
+      if (savedWeighing) {
+         setWeighings(prev => {
+            const exists = prev.some(w => w.id === savedWeighing.id);
+            return exists
+               ? prev.map(w => (w.id === savedWeighing.id ? savedWeighing : w))
+               : [savedWeighing, ...prev];
+         });
+      }
+      loadWeighings();
    }
 
    function handleDeleteClick(weighing: WeighingResponse) {
