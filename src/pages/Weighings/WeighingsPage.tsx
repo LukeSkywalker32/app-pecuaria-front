@@ -28,7 +28,7 @@ import {
    Tooltip,
    Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePermission } from "@/hooks/usePermission";
 import WeighingFormDialog from "@/pages/Weighings/components/WeighingFormDialog";
 import WeighingHistoryDialog from "@/pages/Weighings/components/WeighingHistoryDialog";
@@ -49,6 +49,24 @@ interface WeighingResponse {
    registeredByName: string | null;
    gmd: number | null;
    createdAt: string;
+}
+
+// Acha, pra cada animal, o id da pesagem mais antiga (mesmo critério do
+// backend: date asc, createdAt como desempate). Só essa pesagem pode
+// ter peso/data editados na tela.
+function getFirstWeighingIds(weighings: WeighingResponse[]): Set<string> {
+   const firstByAnimal = new Map<string, WeighingResponse>();
+   for (const w of weighings) {
+      const current = firstByAnimal.get(w.animalId);
+      if (!current) {
+         firstByAnimal.set(w.animalId, w);
+         continue;
+      }
+      const isEarlier =
+         w.date < current.date || (w.date === current.date && w.createdAt < current.createdAt);
+      if (isEarlier) firstByAnimal.set(w.animalId, w);
+   }
+   return new Set(Array.from(firstByAnimal.values(), w => w.id));
 }
 
 export default function WeighingsPage() {
@@ -76,10 +94,14 @@ export default function WeighingsPage() {
    const [historyWeighings, setHistoryWeighings] = useState<WeighingResponse[]>([]);
    const [historyLoading, setHistoryLoading] = useState(false);
 
+   const firstWeighingIds = useMemo(() => getFirstWeighingIds(weighings), [weighings]);
+
    const loadAnimalHistory = async (animalId: string) => {
       setHistoryLoading(true);
       try {
-         const { data } = await api.get<WeighingResponse[]>(`/weighings/animal/${animalId}`);
+         const { data } = await api.get<WeighingResponse[]>(`/weighings/animal/${animalId}`, {
+            params: { _t: Date.now() },
+         });
          setHistoryWeighings(data);
          setSelectedAnimalForHistory(animalId);
          setHistoryOpen(true);
@@ -93,7 +115,11 @@ export default function WeighingsPage() {
    const loadWeighings = useCallback(() => {
       setLoading(true);
       setError("");
-      api.get<WeighingResponse[]>("/weighings")
+      // Cache-busting client-side: garante que o navegador nunca sirva uma
+      // resposta guardada dessa URL, independente do header Cache-Control
+      // do servidor já estar em produção ou não (o Cache-Control resolve
+      // isso do lado certo, mas essa camada aqui não depende de deploy).
+      api.get<WeighingResponse[]>("/weighings", { params: { _t: Date.now() } })
          .then(({ data }) => setWeighings(data))
          .catch(err => {
             const msg = err?.response?.data?.error ?? "Erro ao carregar pesagens";
@@ -282,16 +308,25 @@ export default function WeighingsPage() {
                               <TableCell>{renderGmd(w.gmd)}</TableCell>
                               <TableCell>{w.registeredByName ?? "—"}</TableCell>
                               <TableCell sx={{ textAlign: "center" }}>
-                                 {canEdit && (
-                                    <Tooltip title="Editar">
-                                       <IconButton
-                                          size="small"
-                                          onClick={() => handleEditWeighing(w)}
-                                       >
-                                          <EditIcon fontSize="small" />
-                                       </IconButton>
-                                    </Tooltip>
-                                 )}
+                                 {canEdit &&
+                                    (firstWeighingIds.has(w.id) ? (
+                                       <Tooltip title="Editar">
+                                          <IconButton
+                                             size="small"
+                                             onClick={() => handleEditWeighing(w)}
+                                          >
+                                             <EditIcon fontSize="small" />
+                                          </IconButton>
+                                       </Tooltip>
+                                    ) : (
+                                       <Tooltip title="Só a 1ª pesagem do animal pode ter peso/data editados. Pra corrigir esta, apague e registre de novo.">
+                                          <span>
+                                             <IconButton size="small" disabled>
+                                                <EditIcon fontSize="small" />
+                                             </IconButton>
+                                          </span>
+                                       </Tooltip>
+                                    ))}
                                  {canDelete && (
                                     <Tooltip title="Deletar">
                                        <IconButton
