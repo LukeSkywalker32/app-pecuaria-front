@@ -16,10 +16,12 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/useAuth";
 import api from "@/services/api";
 
 export default function AdminLoginPage() {
    const navigate = useNavigate();
+   const { login } = useAuth();
 
    const [username, setUsername] = useState("");
    const [password, setPassword] = useState("");
@@ -38,9 +40,8 @@ export default function AdminLoginPage() {
             password,
          });
 
-         // Persiste tokens — farmId vem dentro do JWT, não precisamos salvar separado
-         localStorage.setItem("accessToken", data.accessToken);
-         localStorage.setItem("refreshToken", data.refreshToken);
+         // login() salva os tokens e busca /users/me antes de navegar
+         await login(data.accessToken, data.refreshToken);
          localStorage.setItem("role", data.role);
          localStorage.setItem("farmId", "farm-sistema");
 
